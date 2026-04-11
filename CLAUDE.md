@@ -5,7 +5,7 @@
 | Ambiente | Percorso |
 |---|---|
 | Container (Linux) | `/home/user/PlatAImAin` |
-| Windows locale (utente) | `C:\Users\a.scozzari\Desktop\MvPplatAI` |
+| Windows locale | `C:\Users\a.scozzari\Desktop\MvPplatAI` |
 
 ## Repository GitHub
 - Repo: `https://github.com/AScozzari/PlatAImAin.git`
@@ -24,5 +24,11 @@
 cd C:\Users\a.scozzari\Desktop\MvPplatAI\dashboard
 npm install   # solo prima volta
 npm run dev
-# apri http://localhost:5173
+# apri http://localhost:3000
 ```
+
+## Note importanti
+- Cartella locale Windows: `C:\Users\a.scozzari\Desktop\MvPplatAI` (NON PlatAImAin)
+- Dev server porta: **3000** (configurata in vite.config.ts)
+- In modalità DEV il login accetta qualsiasi credenziale (bypass fake token)
+- Per sincronizzare modifiche dal container al Windows: `git pull` nella cartella locale

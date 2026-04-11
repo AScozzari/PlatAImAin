@@ -22,6 +22,15 @@ export function Login() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
+    // Dev bypass: any credentials work when backend is not running
+    if (import.meta.env.DEV) {
+      const fakeToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwidHlwZSI6ImFjY2VzcyIsImV4cCI6OTk5OTk5OTk5OX0.fake";
+      login(fakeToken, "fake-refresh", { id: "1", email: email || "admin@demo.local", role: "admin" });
+      navigate(from, { replace: true });
+      return;
+    }
+
     try {
       const { data } = await authApi.login(email, password);
       login(data.access_token, data.refresh_token, data.user);
