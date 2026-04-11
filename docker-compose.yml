@@ -1,0 +1,279 @@
+version: "3.9"
+
+# ─── GPU anchor (DRY for all vLLM services) ──────────────────────────────────
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+
+x-logging: &logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+
+networks:
+  ai_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  langfuse_data:
+  grafana_data:
+  prometheus_data:
+
+services:
+
+  # ─── Gateway ───────────────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - /models:/models:ro
+      - /data/voices:/data/voices
+      - ./models.config.json:/app/models.config.json:ro
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://customai:customai@postgres:5432/customai}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - VLLM_LLM_URL=${VLLM_LLM_URL:-http://vllm-llm:8001}
+      - VLLM_VISION_URL=${VLLM_VISION_URL:-http://vllm-vision:8002}
+      - VLLM_CODING_URL=${VLLM_CODING_URL:-http://vllm-coding:8003}
+      - VLLM_EMBEDDING_URL=${VLLM_EMBEDDING_URL:-http://vllm-embedding:8004}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
+      - ADMIN_SECRET=${ADMIN_SECRET}
+      - STT_ENABLED=${STT_ENABLED:-true}
+      - WHISPER_MODEL_PATH=${WHISPER_MODEL_PATH:-/models/stt/whisper-large-v3-turbo}
+      - TTS_XTTS_ENABLED=${TTS_XTTS_ENABLED:-true}
+      - XTTS_MODEL_PATH=${XTTS_MODEL_PATH:-/models/tts/xtts-v2}
+      - TTS_KOKORO_ENABLED=${TTS_KOKORO_ENABLED:-true}
+      - KOKORO_MODEL_PATH=${KOKORO_MODEL_PATH:-/models/tts/kokoro-v1}
+      - TTS_STYLETT2_ENABLED=${TTS_STYLETT2_ENABLED:-false}
+      - OAUTH2_GOOGLE_CLIENT_ID=${OAUTH2_GOOGLE_CLIENT_ID}
+      - OAUTH2_GOOGLE_CLIENT_SECRET=${OAUTH2_GOOGLE_CLIENT_SECRET}
+      - OAUTH2_GITHUB_CLIENT_ID=${OAUTH2_GITHUB_CLIENT_ID}
+      - OAUTH2_GITHUB_CLIENT_SECRET=${OAUTH2_GITHUB_CLIENT_SECRET}
+      - DASHBOARD_URL=${DASHBOARD_URL:-http://localhost:3000}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=http://langfuse:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    <<: [*gpu, *logging]
+    restart: unless-stopped
+
+  # ─── Dashboard ─────────────────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
+    depends_on:
+      - gateway
+    networks:
+      - ai_network
+    <<: *logging
+    restart: unless-stopped
+
+  # ─── vLLM — LLM / Reasoning ────────────────────────────────────────────────
+  vllm-llm:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8001:8001"
+    volumes:
+      - /models/llm:/models:ro
+    command: >
+      --model /models/${VLLM_LLM_MODEL:-qwen2.5-72b}
+      --port 8001
+      --host 0.0.0.0
+      --gpu-memory-utilization 0.90
+      --max-model-len 32768
+      --max-num-seqs 32
+      --enable-chunked-prefill
+      --disable-log-requests
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+    networks:
+      - ai_network
+    <<: [*gpu, *logging]
+    restart: unless-stopped
+
+  # ─── vLLM — Coding ─────────────────────────────────────────────────────────
+  vllm-coding:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8003:8003"
+    volumes:
+      - /models/coding:/models:ro
+    command: >
+      --model /models/${VLLM_CODING_MODEL:-qwen-coder-32b}
+      --port 8003
+      --host 0.0.0.0
+      --gpu-memory-utilization 0.90
+      --max-model-len 32768
+      --max-num-seqs 16
+      --enable-chunked-prefill
+      --disable-log-requests
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+    networks:
+      - ai_network
+    <<: [*gpu, *logging]
+    restart: unless-stopped
+
+  # ─── vLLM — Vision ─────────────────────────────────────────────────────────
+  vllm-vision:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8002:8002"
+    volumes:
+      - /models/vision:/models:ro
+    command: >
+      --model /models/${VLLM_VISION_MODEL:-qwen-vl-7b}
+      --port 8002
+      --host 0.0.0.0
+      --gpu-memory-utilization 0.90
+      --max-model-len 8192
+      --max-num-seqs 8
+      --disable-log-requests
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+    networks:
+      - ai_network
+    <<: [*gpu, *logging]
+    restart: unless-stopped
+
+  # ─── vLLM — Embedding ──────────────────────────────────────────────────────
+  vllm-embedding:
+    image: vllm/vllm-openai:latest
+    ports:
+      - "8004:8004"
+    volumes:
+      - /models/embedding:/models:ro
+    command: >
+      --model /models/${VLLM_EMBEDDING_MODEL:-bge-m3}
+      --port 8004
+      --host 0.0.0.0
+      --gpu-memory-utilization 0.50
+      --max-model-len 8192
+      --max-num-seqs 64
+      --disable-log-requests
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN}
+    networks:
+      - ai_network
+    <<: [*gpu, *logging]
+    restart: unless-stopped
+
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-customai}
+      - POSTGRES_USER=${POSTGRES_USER:-customai}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-customai}
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-customai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *logging
+    restart: unless-stopped
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    <<: *logging
+    restart: unless-stopped
+
+  # ─── Langfuse (LLM Tracing) ─────────────────────────────────────────────────
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://customai:customai@postgres:5432/customai}
+      - NEXTAUTH_SECRET=${SESSION_SECRET_KEY:-langfuse-secret}
+      - NEXTAUTH_URL=http://localhost:3001
+      - SALT=${SESSION_SECRET_KEY:-langfuse-salt}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ai_network
+    volumes:
+      - langfuse_data:/app/.next
+    <<: *logging
+    restart: unless-stopped
+
+  # ─── Prometheus ─────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - ai_network
+    <<: *logging
+    restart: unless-stopped
+
+  # ─── Grafana ────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - ai_network
+    <<: *logging
+    restart: unless-stopped

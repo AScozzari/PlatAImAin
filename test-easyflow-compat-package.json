@@ -1,0 +1,11 @@
+{
+  "name": "easyflow-compat-test",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node test-easyflow-compat.js"
+  },
+  "dependencies": {
+    "openai": "^4.77.0"
+  }
+}
