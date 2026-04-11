@@ -108,6 +108,11 @@ export const adminApi = {
   // Models
   listModels: () => api.get("/admin/models"),
   reloadModels: () => api.post("/admin/models/reload"),
+  getModel: (id: string) => api.get(`/admin/models/${id}`),
+  createModel: (data: object) => api.post("/admin/models", data),
+  updateModel: (id: string, data: object) => api.patch(`/admin/models/${id}`, data),
+  deprecateModel: (id: string) => api.patch(`/admin/models/${id}`, { is_active: false, deprecated: true }),
+  restoreModel: (id: string) => api.patch(`/admin/models/${id}`, { is_active: true, deprecated: false }),
 };
 
 export const authApi = {

@@ -100,6 +100,8 @@ CREATE TABLE IF NOT EXISTS models (
     quality VARCHAR(20),
     is_default BOOLEAN NOT NULL DEFAULT false,
     is_enabled BOOLEAN NOT NULL DEFAULT true,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    deprecated BOOLEAN NOT NULL DEFAULT false,
     extra_config JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

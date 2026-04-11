@@ -113,6 +113,8 @@ export const MOCK: Record<string, unknown> = {
   },
 };
 
+MOCK["/admin/models/t1"] = (MOCK["/admin/models"] as { models: unknown[] }).models[0];
+
 export function getMockForUrl(url: string): unknown | null {
   // Strip query params
   const path = url.split("?")[0];
@@ -120,5 +122,11 @@ export function getMockForUrl(url: string): unknown | null {
   if (MOCK[path] !== undefined) return MOCK[path];
   // Tenant detail: /admin/tenants/:id
   if (/^\/admin\/tenants\/[^/]+$/.test(path)) return MOCK["/admin/tenants/t1"];
+  // Model detail: /admin/models/:id (not /pricing or /reload)
+  if (/^\/admin\/models\/[^/]+$/.test(path) && !path.includes("pricing")) {
+    const models = (MOCK["/admin/models"] as { models: unknown[] }).models;
+    const id = path.split("/").pop();
+    return { model: models.find((m: unknown) => (m as { id: string }).id === id) ?? models[0] };
+  }
   return null;
 }

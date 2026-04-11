@@ -10,6 +10,27 @@ from gateway.middleware.admin_auth import require_admin
 router = APIRouter()
 
 
+class ModelCreate(BaseModel):
+    id: str
+    name: str
+    category: str
+    tier: str = "medium"
+    min_plan: str = "starter"
+    vram_gb: int | None = None
+    hf_repo: str | None = None
+    capabilities: dict = {}
+
+
+class ModelUpdate(BaseModel):
+    name: str | None = None
+    tier: str | None = None
+    min_plan: str | None = None
+    vram_gb: int | None = None
+    is_active: bool | None = None
+    deprecated: bool | None = None
+    capabilities: dict | None = None
+
+
 @router.get("/models")
 async def list_models_admin(_=Depends(require_admin)):
     rows = await db.fetch(
@@ -27,6 +48,60 @@ async def list_models_admin(_=Depends(require_admin)):
         }
         for r in rows
     ]})
+
+
+@router.post("/models")
+async def create_model(body: ModelCreate, _=Depends(require_admin)):
+    import json as _json
+    await db.execute(
+        """
+        INSERT INTO models (id, name, category, tier, min_plan, vram_gb, hf_repo, capabilities, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+        ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name, tier = EXCLUDED.tier, min_plan = EXCLUDED.min_plan,
+            vram_gb = EXCLUDED.vram_gb, hf_repo = EXCLUDED.hf_repo,
+            capabilities = EXCLUDED.capabilities, is_active = true, deprecated = false,
+            updated_at = NOW()
+        """,
+        body.id, body.name, body.category, body.tier, body.min_plan,
+        body.vram_gb, body.hf_repo, _json.dumps(body.capabilities),
+    )
+    return JSONResponse(status_code=201, content={"id": body.id, "created": True})
+
+
+@router.get("/models/{model_id}")
+async def get_model(model_id: str, _=Depends(require_admin)):
+    row = await db.fetchrow(
+        "SELECT m.*, p.input_cost_per_1k_micro, p.output_cost_per_1k_micro "
+        "FROM models m LEFT JOIN model_pricing p ON p.model_id = m.id WHERE m.id = $1",
+        model_id,
+    )
+    if not row:
+        return JSONResponse(status_code=404, content={"error": "Model not found"})
+    return JSONResponse(content={"model": dict(row)})
+
+
+@router.patch("/models/{model_id}")
+async def update_model(model_id: str, body: ModelUpdate, _=Depends(require_admin)):
+    import json as _json
+    fields, vals = [], []
+    if body.name is not None:       fields.append("name"); vals.append(body.name)
+    if body.tier is not None:       fields.append("tier"); vals.append(body.tier)
+    if body.min_plan is not None:   fields.append("min_plan"); vals.append(body.min_plan)
+    if body.vram_gb is not None:    fields.append("vram_gb"); vals.append(body.vram_gb)
+    if body.is_active is not None:  fields.append("is_active"); vals.append(body.is_active)
+    if body.deprecated is not None: fields.append("deprecated"); vals.append(body.deprecated)
+    if body.capabilities is not None:
+        fields.append("capabilities"); vals.append(_json.dumps(body.capabilities))
+    if not fields:
+        return JSONResponse(content={"updated": False, "reason": "no fields"})
+    set_clause = ", ".join(f"{f} = ${i+1}" for i, f in enumerate(fields))
+    vals.append(model_id)
+    await db.execute(
+        f"UPDATE models SET {set_clause}, updated_at = NOW() WHERE id = ${len(vals)}",
+        *vals,
+    )
+    return JSONResponse(content={"model_id": model_id, "updated": True})
 
 
 @router.patch("/models/{model_id}/enable")
