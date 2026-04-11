@@ -114,9 +114,11 @@ export const MOCK: Record<string, unknown> = {
 };
 
 export function getMockForUrl(url: string): unknown | null {
+  // Strip query params
+  const path = url.split("?")[0];
   // Exact match
-  if (MOCK[url]) return MOCK[url];
+  if (MOCK[path] !== undefined) return MOCK[path];
   // Tenant detail: /admin/tenants/:id
-  if (/^\/admin\/tenants\/[^/]+$/.test(url)) return MOCK["/admin/tenants/t1"];
+  if (/^\/admin\/tenants\/[^/]+$/.test(path)) return MOCK["/admin/tenants/t1"];
   return null;
 }
