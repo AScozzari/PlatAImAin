@@ -27,7 +27,7 @@ async def record_usage(
     """
     try:
         # Calculate cost from model_pricing table
-        cost_micro = await _calculate_cost(
+        cost_micro, currency = await _calculate_cost(
             model_id, category, prompt_tokens, completion_tokens,
             audio_seconds, characters_count
         )
@@ -37,9 +37,9 @@ async def record_usage(
             INSERT INTO token_usage (
                 tenant_id, model_id, model_category,
                 prompt_tokens, completion_tokens,
-                audio_seconds, characters_count, cost_micro,
+                audio_seconds, characters_count, cost_micro, currency,
                 request_id, agent_id, session_id, metadata
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             """,
             tenant_id,
             model_id,
@@ -49,6 +49,7 @@ async def record_usage(
             audio_seconds,
             characters_count,
             cost_micro,
+            currency,
             request_id,
             agent_id,
             session_id,
@@ -66,29 +67,31 @@ async def _calculate_cost(
     completion_tokens: int,
     audio_seconds: float,
     characters_count: int,
-) -> int:
-    """Return cost in micro-USD."""
+) -> tuple[int, str]:
+    """Return (cost_micro, currency). Cost is in micro-units of currency."""
     row = await db.fetchrow(
-        "SELECT input_cost_per_1k_micro, output_cost_per_1k_micro FROM model_pricing WHERE model_id = $1",
+        "SELECT input_cost_per_1k_micro, output_cost_per_1k_micro, currency FROM model_pricing WHERE model_id = $1",
         model_id,
     )
     if not row:
-        return 0
+        return 0, "EUR"
 
-    input_cost = row["input_cost_per_1k_micro"]
-    output_cost = row["output_cost_per_1k_micro"]
+    input_cost  = row["input_cost_per_1k_micro"] or 0
+    output_cost = row["output_cost_per_1k_micro"] or 0
+    currency    = row["currency"] or "EUR"
 
     if category == "stt":
-        return int(audio_seconds / 1000 * input_cost)
+        micro = int(audio_seconds / 1000 * input_cost)
     elif category == "tts":
-        return int(characters_count / 1000 * input_cost)
+        micro = int(characters_count / 1000 * input_cost)
     elif category == "embedding":
-        return int(prompt_tokens / 1000 * input_cost)
+        micro = int(prompt_tokens / 1000 * input_cost)
     else:
-        return int(
+        micro = int(
             (prompt_tokens / 1000 * input_cost) +
             (completion_tokens / 1000 * output_cost)
         )
+    return micro, currency
 
 
 def track_in_background(

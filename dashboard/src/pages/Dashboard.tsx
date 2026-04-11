@@ -57,46 +57,43 @@ export function Dashboard() {
     );
   }
 
+  const summary = data?.summary ?? {};
   const kpis = [
     {
       label: "Active Tenants",
-      value: String(data?.active_tenants ?? 0),
+      value: String(summary.active_tenants ?? 0),
       icon: Users,
       color: "bg-blue-50 text-blue-600",
     },
     {
       label: "Tokens This Month",
-      value: formatTokens(data?.total_tokens_month ?? 0),
+      value: formatTokens(summary.total_tokens ?? 0),
       icon: Zap,
       color: "bg-purple-50 text-purple-600",
     },
     {
       label: "Cost This Month",
-      value: formatCost(data?.total_cost_month ?? 0),
+      value: formatCost(summary.total_cost ?? 0),
       icon: DollarSign,
       color: "bg-green-50 text-green-600",
     },
     {
-      label: "Req / Hour",
-      value: String(data?.requests_per_hour ?? 0),
+      label: "Requests This Month",
+      value: formatTokens(summary.total_requests ?? 0),
       icon: Activity,
       color: "bg-orange-50 text-orange-600",
     },
   ];
 
-  const dailyTokens = (data?.daily_tokens ?? []).map(
-    (d: { date: string; total_tokens: number }) => ({
+  const dailyTokens = (data?.daily ?? []).map(
+    (d: { date: string; tokens: number }) => ({
       date: d.date,
-      tokens: d.total_tokens,
+      tokens: d.tokens,
     })
   );
 
-  const categoryBreakdown = (data?.category_breakdown ?? []).map(
-    (d: { category: string; total_cost: number }) => ({
-      category: d.category,
-      cost: d.total_cost,
-    })
-  );
+  // category breakdown derived from top_tenants for now (real overview doesn't include it)
+  const categoryBreakdown: { category: string; cost: number }[] = [];
 
   return (
     <div className="space-y-6">
@@ -130,15 +127,15 @@ export function Dashboard() {
           <div className="space-y-2">
             {data.top_tenants
               .slice(0, 5)
-              .map((t: { tenant_name: string; total_tokens: number; total_cost: number }) => (
+              .map((t: { tenant_name: string; tokens: number; cost: number }) => (
                 <div
                   key={t.tenant_name}
                   className="flex items-center justify-between py-2 border-b last:border-0"
                 >
                   <span className="text-sm font-medium text-gray-800">{t.tenant_name}</span>
                   <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span>{formatTokens(t.total_tokens)} tok</span>
-                    <span className="text-gray-900 font-medium">{formatCost(t.total_cost)}</span>
+                    <span>{formatTokens(t.tokens)} tok</span>
+                    <span className="text-gray-900 font-medium">{formatCost(t.cost)}</span>
                   </div>
                 </div>
               ))}

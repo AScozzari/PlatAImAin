@@ -101,6 +101,8 @@ export const adminApi = {
   listPricing: () => api.get("/admin/models/pricing"),
   updatePricing: (modelId: string, data: object) =>
     api.patch(`/admin/models/${modelId}/pricing`, data),
+  getPricingHistory: (modelId: string) =>
+    api.get(`/admin/models/${modelId}/pricing/history`),
 
   // Health
   health: () => api.get("/admin/health"),

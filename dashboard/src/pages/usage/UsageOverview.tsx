@@ -42,10 +42,10 @@ export function UsageOverview() {
     );
   }
 
-  const dailyTokens = (data?.daily_tokens ?? []).map(
-    (d: { date: string; total_tokens: number }) => ({
+  const dailyTokens = (data?.daily ?? []).map(
+    (d: { date: string; tokens: number }) => ({
       date: d.date,
-      tokens: d.total_tokens,
+      tokens: d.tokens,
     })
   );
 
@@ -56,12 +56,8 @@ export function UsageOverview() {
     })
   );
 
-  const categoryBreakdown = (data?.category_breakdown ?? []).map(
-    (d: { category: string; total_tokens: number }) => ({
-      category: d.category,
-      tokens: d.total_tokens,
-    })
-  );
+  // category breakdown not in overview endpoint; could be derived from billing
+  const categoryBreakdown: { category: string; tokens: number }[] = [];
 
   const topTenants = data?.top_tenants ?? [];
 
@@ -163,19 +159,19 @@ export function UsageOverview() {
                 (t: {
                   tenant_id: string;
                   tenant_name: string;
-                  total_tokens: number;
-                  total_cost: number;
-                  total_requests: number;
+                  tokens: number;
+                  cost: number;
+                  requests: number;
                 }) => (
                   <tr key={t.tenant_id} className="border-b last:border-0">
                     <td className="py-2.5 font-medium text-gray-800">{t.tenant_name}</td>
                     <td className="py-2.5 text-right text-gray-600">
-                      {formatTokens(t.total_tokens)}
+                      {formatTokens(t.tokens)}
                     </td>
                     <td className="py-2.5 text-right text-gray-900 font-medium">
-                      {formatCost(t.total_cost)}
+                      {formatCost(t.cost)}
                     </td>
-                    <td className="py-2.5 text-right text-gray-600">{t.total_requests}</td>
+                    <td className="py-2.5 text-right text-gray-600">{t.requests}</td>
                     <td className="py-2.5 text-right">
                       <Link
                         to={`/usage/${t.tenant_id}`}

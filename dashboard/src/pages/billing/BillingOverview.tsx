@@ -34,6 +34,7 @@ export function BillingOverview() {
   });
 
   const rows: BillingRow[] = data?.rows ?? [];
+  const currency: string = data?.currency ?? "EUR";
   const totalCost = rows.reduce((s, r) => s + r.total_cost, 0);
 
   return (
@@ -74,7 +75,7 @@ export function BillingOverview() {
                     {c}
                   </th>
                 ))}
-                <th className="text-right px-4 py-3 font-medium text-gray-900">Total</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-900">Total ({currency})</th>
               </tr>
             </thead>
             <tbody>

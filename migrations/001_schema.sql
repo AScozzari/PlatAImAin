@@ -195,3 +195,19 @@ DO $$ BEGIN
         BEFORE UPDATE ON models
         FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ─── Pricing currency support ─────────────────────────────────────────────────
+ALTER TABLE model_pricing ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'EUR';
+ALTER TABLE token_usage   ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'EUR';
+
+-- History table: keep all price changes with timestamps
+CREATE TABLE IF NOT EXISTS model_pricing_history (
+    id            BIGSERIAL PRIMARY KEY,
+    model_id      VARCHAR(100) NOT NULL,
+    input_cost_per_1k_micro  INT NOT NULL,
+    output_cost_per_1k_micro INT NOT NULL,
+    currency      VARCHAR(3)  NOT NULL DEFAULT 'EUR',
+    changed_by    VARCHAR(255),
+    effective_from TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pricing_history_model ON model_pricing_history(model_id, effective_from DESC);

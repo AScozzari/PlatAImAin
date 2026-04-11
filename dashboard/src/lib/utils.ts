@@ -13,8 +13,8 @@ export function formatTokens(n: number): string {
   return String(n);
 }
 
-export function formatCost(usd: number): string {
-  return `$${usd.toFixed(4)}`;
+export function formatCost(eur: number, decimals = 4): string {
+  return `€${eur.toFixed(decimals)}`;
 }
 
 export function formatDate(date: string | Date): string {
