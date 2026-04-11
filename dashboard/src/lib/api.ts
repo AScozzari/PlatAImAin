@@ -17,6 +17,22 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+// ─── DEV mock interceptor ────────────────────────────────────────────────────
+if (import.meta.env.DEV) {
+  const { getMockForUrl } = await import("./mockData");
+  api.interceptors.response.use(
+    (res) => res,
+    (error) => {
+      const url: string = error.config?.url ?? "";
+      const mock = getMockForUrl(url);
+      if (mock !== null) {
+        return Promise.resolve({ data: mock, status: 200, statusText: "OK (mock)", headers: {}, config: error.config });
+      }
+      return Promise.reject(error);
+    }
+  );
+}
+
 // ─── Response interceptor: auto-refresh on 401 ───────────────────────────────
 let isRefreshing = false;
 let pendingQueue: Array<{ resolve: (v: unknown) => void; reject: (e: unknown) => void }> = [];
