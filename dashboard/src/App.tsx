@@ -12,6 +12,7 @@ import { BillingOverview } from "@/pages/billing/BillingOverview";
 import { BillingExport } from "@/pages/billing/BillingExport";
 import { ModelList } from "@/pages/models/ModelList";
 import { ModelPricing } from "@/pages/models/ModelPricing";
+import { ModelSearch } from "@/pages/models/ModelSearch";
 import { HealthDashboard } from "@/pages/health/HealthDashboard";
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="billing" element={<BillingOverview />} />
           <Route path="billing/export" element={<BillingExport />} />
           <Route path="models" element={<ModelList />} />
+          <Route path="models/search" element={<ModelSearch />} />
           <Route path="models/:id/pricing" element={<ModelPricing />} />
           <Route path="health" element={<HealthDashboard />} />
           <Route path="*" element={<Navigate to="/" replace />} />

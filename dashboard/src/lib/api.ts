@@ -115,6 +115,30 @@ export const adminApi = {
   updateModel: (id: string, data: object) => api.patch(`/admin/models/${id}`, data),
   deprecateModel: (id: string) => api.patch(`/admin/models/${id}`, { is_active: false, deprecated: true }),
   restoreModel: (id: string) => api.patch(`/admin/models/${id}`, { is_active: true, deprecated: false }),
+
+  // Sessions
+  listSessions: () => api.get("/admin/sessions"),
+  listModelSessions: (modelId: string) => api.get(`/admin/models/${modelId}/sessions`),
+  startSession: (modelId: string, data: {
+    backend_url: string;
+    gpu_ids?: string[];
+    tensor_parallel_size?: number;
+    max_model_len?: number;
+    extra_config?: object;
+  }) => api.post(`/admin/models/${modelId}/sessions/start`, data),
+  stopSession: (sessionId: string) => api.post(`/admin/sessions/${sessionId}/stop`),
+  deleteSession: (sessionId: string) => api.delete(`/admin/sessions/${sessionId}`),
+  patchSession: (sessionId: string, data: { status: string }) =>
+    api.patch(`/admin/sessions/${sessionId}`, data),
+
+  // Model Search
+  searchModels: (params: {
+    q: string;
+    category?: string;
+    source?: string;
+    max_results?: number;
+    compatible_only?: boolean;
+  }) => api.get("/admin/models/search", { params }),
 };
 
 export const authApi = {

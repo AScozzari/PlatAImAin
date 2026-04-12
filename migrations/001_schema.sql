@@ -211,3 +211,31 @@ CREATE TABLE IF NOT EXISTS model_pricing_history (
     effective_from TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_pricing_history_model ON model_pricing_history(model_id, effective_from DESC);
+
+-- ─── Model Sessions ───────────────────────────────────────────────────────────
+-- One row = one running process (vLLM, stt-service, tts-service instance)
+-- Multiple sessions for the same model → round-robin load balancing
+CREATE TABLE IF NOT EXISTS model_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    model_id VARCHAR(100) NOT NULL REFERENCES models(id),
+    backend_url VARCHAR(500) NOT NULL,
+    gpu_ids TEXT[] NOT NULL DEFAULT '{}',
+    status VARCHAR(20) NOT NULL DEFAULT 'stopped',  -- running|stopped|loading|error
+    tensor_parallel_size INT NOT NULL DEFAULT 1,
+    max_model_len INT,
+    started_at TIMESTAMPTZ,
+    stopped_at TIMESTAMPTZ,
+    started_by VARCHAR(255),
+    extra_config JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_model_sessions_model ON model_sessions(model_id, status);
+CREATE INDEX IF NOT EXISTS idx_model_sessions_status ON model_sessions(status);
+
+DO $$ BEGIN
+    CREATE TRIGGER trg_model_sessions_updated_at
+        BEFORE UPDATE ON model_sessions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

@@ -141,6 +141,114 @@
             "function_calling": true
           },
           "openai_aliases": []
+        },
+        "phi-4-mini": {
+          "id": "phi-4-mini",
+          "name": "Phi-4 Mini",
+          "hf_repo": "microsoft/Phi-4-mini-instruct",
+          "description": "Modello Microsoft ultracompatto. 3.8B parametri con qualità sorprendente per la dimensione.",
+          "scope": "Edge deployment, CPU inference, dispositivi con < 4 GB RAM, prototipazione rapida",
+          "strengths": ["CPU-ready", "edge deployment", "sorprendente qualità/size", "instruction following", "basso costo"],
+          "languages": ["en", "it", "zh", "fr", "de", "es"],
+          "context_window": 131072,
+          "parameters_b": 3.8,
+          "vram_gb": 3,
+          "quantization": "fp16",
+          "speed": "fast",
+          "quality": "good",
+          "tier": "fast",
+          "is_default": false,
+          "min_plan": "starter",
+          "tags": ["edge", "cpu", "lightweight", "small", "microsoft"],
+          "capabilities": {
+            "tool_calling": true,
+            "streaming": true,
+            "vision": false,
+            "json_mode": true,
+            "function_calling": true
+          },
+          "openai_aliases": []
+        },
+        "qwen2.5-3b": {
+          "id": "qwen2.5-3b",
+          "name": "Qwen 2.5 3B",
+          "hf_repo": "Qwen/Qwen2.5-3B-Instruct",
+          "description": "Versione ultraleggera della famiglia Qwen 2.5. Ottimo italiano su hardware economico.",
+          "scope": "Chatbot leggero, edge, dispositivi IoT, deployment senza GPU dedicata",
+          "strengths": ["italiano ok", "ultra-leggero", "edge", "no GPU", "tool calling base"],
+          "languages": ["it", "en", "zh"],
+          "context_window": 32768,
+          "parameters_b": 3,
+          "vram_gb": 3,
+          "quantization": "fp16",
+          "speed": "fast",
+          "quality": "good",
+          "tier": "fast",
+          "is_default": false,
+          "min_plan": "starter",
+          "tags": ["edge", "cpu", "lightweight", "small", "italian"],
+          "capabilities": {
+            "tool_calling": true,
+            "streaming": true,
+            "vision": false,
+            "json_mode": true,
+            "function_calling": true
+          },
+          "openai_aliases": []
+        },
+        "gemma2-2b": {
+          "id": "gemma2-2b",
+          "name": "Gemma 2 2B",
+          "hf_repo": "google/gemma-2-2b-it",
+          "description": "Il più piccolo modello Google di produzione. Sorprendentemente capace a 2B parametri.",
+          "scope": "Raspberry Pi, laptop entry-level, edge AI, prototipazione su CPU",
+          "strengths": ["CPU puro", "raspberry pi", "ultraleggero", "Google quality", "2.5 GB VRAM"],
+          "languages": ["en", "it", "de", "fr", "es"],
+          "context_window": 8192,
+          "parameters_b": 2,
+          "vram_gb": 2.5,
+          "quantization": "fp16",
+          "speed": "fast",
+          "quality": "good",
+          "tier": "fast",
+          "is_default": false,
+          "min_plan": "starter",
+          "tags": ["edge", "cpu", "raspberry", "tiny", "google"],
+          "capabilities": {
+            "tool_calling": false,
+            "streaming": true,
+            "vision": false,
+            "json_mode": false,
+            "function_calling": false
+          },
+          "openai_aliases": []
+        },
+        "smollm2-1.7b": {
+          "id": "smollm2-1.7b",
+          "name": "SmolLM2 1.7B",
+          "hf_repo": "HuggingFaceTB/SmolLM2-1.7B-Instruct",
+          "description": "Il modello più piccolo con buona instruction following. Gira su Raspberry Pi 4.",
+          "scope": "IoT, Raspberry Pi 4, CPU ultra-low, deploy senza infrastruttura, assistente offline",
+          "strengths": ["raspberry pi 4", "1.7B leggero", "offline", "no GPU", "assistente base"],
+          "languages": ["en", "it"],
+          "context_window": 8192,
+          "parameters_b": 1.7,
+          "vram_gb": 2,
+          "quantization": "fp16",
+          "speed": "fast",
+          "quality": "moderate",
+          "tier": "fast",
+          "is_default": false,
+          "min_plan": "starter",
+          "tags": ["edge", "raspberry", "iot", "tiny", "offline"],
+          "capabilities": {
+            "tool_calling": false,
+            "streaming": true,
+            "vision": false,
+            "json_mode": false,
+            "function_calling": false
+          },
+          "openai_aliases": []
         }
       }
     },
@@ -321,6 +429,33 @@
             "function_calling": true
           },
           "openai_aliases": []
+        },
+        "qwen-coder-1.5b": {
+          "id": "qwen-coder-1.5b",
+          "name": "Qwen 2.5 Coder 1.5B",
+          "hf_repo": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+          "description": "Il modello coding più piccolo utile. Autocomplete rapido su CPU o edge device.",
+          "scope": "Autocomplete in-editor su laptop, snippet veloci, edge coding assistant, CI/CD leggero",
+          "strengths": ["CPU coding", "autocomplete edge", "latenza minima", "snippet", "ultraleggero"],
+          "languages": ["en"],
+          "context_window": 32768,
+          "parameters_b": 1.5,
+          "vram_gb": 2,
+          "quantization": "fp16",
+          "speed": "fast",
+          "quality": "good",
+          "tier": "fast",
+          "is_default": false,
+          "min_plan": "starter",
+          "tags": ["coding", "edge", "cpu", "autocomplete", "tiny"],
+          "capabilities": {
+            "tool_calling": false,
+            "streaming": true,
+            "vision": false,
+            "json_mode": false,
+            "function_calling": false
+          },
+          "openai_aliases": []
         }
       }
     },
@@ -427,6 +562,32 @@
       "backend_url_env": "VLLM_EMBEDDING_URL",
       "default_model": "bge-m3",
       "models": {
+        "all-minilm-l6": {
+          "id": "all-minilm-l6",
+          "name": "All-MiniLM L6-v2",
+          "hf_repo": "sentence-transformers/all-MiniLM-L6-v2",
+          "description": "Il modello embedding più leggero disponibile. 22M parametri, gira su CPU puro in < 10ms.",
+          "scope": "Edge RAG, classificazione leggera, similarità su CPU, deploy senza GPU",
+          "strengths": ["CPU puro", "22M parametri", "< 10ms latenza", "384 dim compatto", "edge RAG"],
+          "languages": ["en"],
+          "dimensions": 384,
+          "max_tokens": 512,
+          "vram_gb": 0.1,
+          "speed": "fast",
+          "quality": "good",
+          "tier": "fast",
+          "is_default": false,
+          "min_plan": "starter",
+          "tags": ["embedding", "tiny", "cpu", "edge", "fast"],
+          "capabilities": {
+            "tool_calling": false,
+            "streaming": false,
+            "vision": false,
+            "batch_input": true,
+            "max_batch_size": 500
+          },
+          "openai_aliases": []
+        },
         "nomic-embed-v1.5": {
           "id": "nomic-embed-v1.5",
           "name": "Nomic Embed Text V1.5",
@@ -510,10 +671,58 @@
     "stt": {
       "description": "Trascrizione audio in testo. Supporta italiano nativo, inglese e 99 lingue.",
       "endpoint_type": "audio_transcriptions",
-      "backend": "faster_whisper_embedded",
-      "backend_url_env": null,
+      "backend": "stt_service",
+      "backend_url_env": "STT_SERVICE_URL",
       "default_model": "whisper-large-v3-turbo",
       "models": {
+        "whisper-tiny": {
+          "id": "whisper-tiny",
+          "name": "Whisper Tiny",
+          "hf_repo": "openai/whisper-tiny",
+          "description": "Il modello STT più piccolo al mondo utile. Gira interamente su CPU, latenza < 1 secondo.",
+          "scope": "CPU-only STT, edge device, trascrizione offline, IoT, Raspberry Pi",
+          "strengths": ["CPU puro", "< 1s latenza", "39M parametri", "raspberry pi", "offline"],
+          "languages": ["en", "it", "fr", "de", "es"],
+          "vram_gb": 0.2,
+          "speed": "fast",
+          "quality": "moderate",
+          "tier": "fast",
+          "is_default": false,
+          "min_plan": "starter",
+          "supported_formats": ["mp3", "wav", "webm", "ogg", "flac"],
+          "max_file_mb": 25,
+          "tags": ["stt", "tiny", "cpu", "edge", "offline"],
+          "capabilities": {
+            "tool_calling": false,
+            "streaming": false,
+            "vision": false
+          },
+          "openai_aliases": []
+        },
+        "whisper-small": {
+          "id": "whisper-small",
+          "name": "Whisper Small",
+          "hf_repo": "openai/whisper-small",
+          "description": "Whisper piccolo ma sorprendentemente accurato. 1 GB VRAM o CPU veloce.",
+          "scope": "STT low-cost, audio in condizioni buone, deployment senza GPU dedicata",
+          "strengths": ["244M parametri", "CPU fast", "buona accuratezza", "bassa VRAM", "economico"],
+          "languages": ["it", "en", "fr", "de", "es"],
+          "vram_gb": 1,
+          "speed": "fast",
+          "quality": "good",
+          "tier": "fast",
+          "is_default": false,
+          "min_plan": "starter",
+          "supported_formats": ["mp3", "wav", "webm", "ogg", "flac"],
+          "max_file_mb": 25,
+          "tags": ["stt", "small", "cpu", "low-cost"],
+          "capabilities": {
+            "tool_calling": false,
+            "streaming": false,
+            "vision": false
+          },
+          "openai_aliases": []
+        },
         "whisper-medium": {
           "id": "whisper-medium",
           "name": "Whisper Medium",
@@ -615,8 +824,8 @@
     "tts": {
       "description": "Sintesi vocale testo-in-audio. Supporta italiano nativo, voice cloning per tenant.",
       "endpoint_type": "audio_speech",
-      "backend": "tts_embedded",
-      "backend_url_env": null,
+      "backend": "tts_service",
+      "backend_url_env": "TTS_SERVICE_URL",
       "default_model": "xtts-v2",
       "models": {
         "kokoro-v1": {

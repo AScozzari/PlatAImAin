@@ -142,6 +142,104 @@ const _mockPricingHistory = {
   ],
 };
 
+const _sessionEntry = (
+  id: string,
+  modelId: string,
+  backendUrl: string,
+  gpuIds: string[],
+  status: string,
+  daysAgo: number
+) => {
+  const d = new Date(today);
+  d.setDate(d.getDate() - daysAgo);
+  return {
+    id,
+    model_id: modelId,
+    backend_url: backendUrl,
+    gpu_ids: gpuIds,
+    status,
+    tensor_parallel_size: gpuIds.length || 1,
+    max_model_len: null,
+    started_at: status === "running" ? d.toISOString() : null,
+    stopped_at: status === "stopped" ? d.toISOString() : null,
+    started_by: "admin@demo.local",
+    extra_config: {},
+    created_at: d.toISOString(),
+    updated_at: d.toISOString(),
+  };
+};
+
+const _mockSessions = {
+  sessions: [
+    _sessionEntry("s1", "qwen2.5-72b", "http://gpu0:8001", ["0"], "running", 5),
+    _sessionEntry("s2", "qwen2.5-72b", "http://gpu1:8001", ["1"], "running", 3),
+    _sessionEntry("s3", "qwen2.5-32b", "http://gpu2:8001", ["2"], "running", 7),
+    _sessionEntry("s4", "whisper-large-v3-turbo", "http://stt-service:8010", ["3"], "running", 2),
+    _sessionEntry("s5", "xtts-v2", "http://tts-service:8020", ["3"], "running", 2),
+    _sessionEntry("s6", "deepseek-r1-70b", "http://gpu4:8001", ["4", "5"], "stopped", 10),
+    _sessionEntry("s7", "bge-m3", "http://gpu6:8001", ["6"], "running", 1),
+  ],
+};
+
+const _mockModelSearch = {
+  source: "huggingface",
+  query: "llama",
+  category: "llm",
+  total: 5,
+  models: [
+    {
+      id: "meta-llama--llama-3.3-70b-instruct",
+      name: "Llama-3.3-70B-Instruct",
+      hf_repo: "meta-llama/Llama-3.3-70B-Instruct",
+      category: "llm",
+      estimated_vram_gb: 42,
+      downloads: 1_200_000,
+      likes: 3400,
+      tags: ["text-generation", "llama", "meta", "70b"],
+      pipeline_tag: "text-generation",
+      compatible: true,
+      gated: true,
+      private: false,
+      author: "meta-llama",
+      last_modified: "2024-12-01T10:00:00Z",
+    },
+    {
+      id: "meta-llama--llama-3.1-8b-instruct",
+      name: "Llama-3.1-8B-Instruct",
+      hf_repo: "meta-llama/Llama-3.1-8B-Instruct",
+      category: "llm",
+      estimated_vram_gb: 8,
+      downloads: 2_800_000,
+      likes: 5200,
+      tags: ["text-generation", "llama", "meta", "8b"],
+      pipeline_tag: "text-generation",
+      compatible: true,
+      gated: true,
+      private: false,
+      author: "meta-llama",
+      last_modified: "2024-10-15T10:00:00Z",
+    },
+    {
+      id: "unsloth--llama-3.2-3b-instruct",
+      name: "Llama-3.2-3B-Instruct",
+      hf_repo: "unsloth/Llama-3.2-3B-Instruct",
+      category: "llm",
+      estimated_vram_gb: 3,
+      downloads: 950_000,
+      likes: 1800,
+      tags: ["text-generation", "llama", "3b", "edge"],
+      pipeline_tag: "text-generation",
+      compatible: true,
+      gated: false,
+      private: false,
+      author: "unsloth",
+      last_modified: "2024-11-10T10:00:00Z",
+    },
+  ],
+};
+
+MOCK["/admin/sessions"] = _mockSessions;
+
 export function getMockForUrl(url: string): unknown | null {
   // Strip query params
   const path = url.split("?")[0];
@@ -153,7 +251,17 @@ export function getMockForUrl(url: string): unknown | null {
   if (/^\/admin\/models\/[^/]+\/pricing\/history$/.test(path)) {
     return { ...(_mockPricingHistory), model_id: path.split("/")[3] };
   }
-  // Model detail: /admin/models/:id (not /pricing, /reload, /enable, /health)
+  // Sessions for model: /admin/models/:id/sessions
+  if (/^\/admin\/models\/[^/]+\/sessions$/.test(path)) {
+    const modelId = path.split("/")[3];
+    const sessions = (_mockSessions.sessions as { model_id: string }[]).filter(
+      (s) => s.model_id === modelId
+    );
+    return { model_id: modelId, sessions };
+  }
+  // Model search: /admin/models/search (has query params)
+  if (path === "/admin/models/search") return _mockModelSearch;
+  // Model detail: /admin/models/:id (not /pricing, /reload, /enable, /health, /search, /sessions)
   if (/^\/admin\/models\/[^/]+$/.test(path)) {
     const models = (MOCK["/admin/models"] as { models: unknown[] }).models;
     const id = path.split("/").pop();

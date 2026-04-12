@@ -200,6 +200,7 @@ class ModelRouter:
                 "category": model["category"],
                 "name": model.get("name", model_id),
                 "description": model.get("description", ""),
+                "scope": model.get("scope", ""),
                 "capabilities": model.get("capabilities", {}),
                 "context_window": model.get("context_window"),
                 "speed": model.get("speed"),
@@ -210,6 +211,9 @@ class ModelRouter:
                 "tags": model.get("tags", []),
                 "languages": model.get("languages", []),
                 "strengths": model.get("strengths", []),
+                # session_manager fields — populated asynchronously by routes/models.py
+                "active_sessions": 0,
+                "online": False,
             })
         return results
 

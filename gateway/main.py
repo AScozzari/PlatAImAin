@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, APIRouter, Request
 from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 
@@ -20,6 +20,8 @@ from gateway.routes import (
     voices,
 )
 from gateway.routes.admin import billing, health, models_admin, tenants
+from gateway.routes.admin import sessions as sessions_admin
+from gateway.routes.admin import model_search
 from gateway.middleware.admin_auth import require_admin
 
 logging.basicConfig(
@@ -52,7 +54,7 @@ app.add_middleware(TenantAuthMiddleware)
 
 # ─── Public health endpoint ───────────────────────────────────────────────────
 @app.get("/health")
-async def health():
+async def health_check():
     if startup.is_ready():
         return JSONResponse(content={"status": "ok", "models_ready": True})
     return JSONResponse(content={"status": "starting", "models_ready": False})
@@ -76,13 +78,13 @@ app.include_router(auth.router)
 app.include_router(oauth2.router)
 
 # ─── Admin routes (JWT auth via require_admin dependency on each handler) ────
-from fastapi import APIRouter
-
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
 admin_router.include_router(tenants.router)
 admin_router.include_router(billing.router)
 admin_router.include_router(health.router)
 admin_router.include_router(models_admin.router)
+admin_router.include_router(sessions_admin.router)
+admin_router.include_router(model_search.router)
 app.include_router(admin_router)
 
 

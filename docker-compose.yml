@@ -30,7 +30,7 @@ volumes:
 
 services:
 
-  # ─── Gateway ───────────────────────────────────────────────────────────────
+  # ─── Gateway (pure HTTP proxy — no GPU) ────────────────────────────────────
   gateway:
     build:
       context: ./gateway
@@ -38,7 +38,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - /models:/models:ro
       - /data/voices:/data/voices
       - ./models.config.json:/app/models.config.json:ro
     environment:
@@ -48,16 +47,11 @@ services:
       - VLLM_VISION_URL=${VLLM_VISION_URL:-http://vllm-vision:8002}
       - VLLM_CODING_URL=${VLLM_CODING_URL:-http://vllm-coding:8003}
       - VLLM_EMBEDDING_URL=${VLLM_EMBEDDING_URL:-http://vllm-embedding:8004}
+      - STT_SERVICE_URL=${STT_SERVICE_URL:-http://stt-service:8010}
+      - TTS_SERVICE_URL=${TTS_SERVICE_URL:-http://tts-service:8020}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
       - ADMIN_SECRET=${ADMIN_SECRET}
-      - STT_ENABLED=${STT_ENABLED:-true}
-      - WHISPER_MODEL_PATH=${WHISPER_MODEL_PATH:-/models/stt/whisper-large-v3-turbo}
-      - TTS_XTTS_ENABLED=${TTS_XTTS_ENABLED:-true}
-      - XTTS_MODEL_PATH=${XTTS_MODEL_PATH:-/models/tts/xtts-v2}
-      - TTS_KOKORO_ENABLED=${TTS_KOKORO_ENABLED:-true}
-      - KOKORO_MODEL_PATH=${KOKORO_MODEL_PATH:-/models/tts/kokoro-v1}
-      - TTS_STYLETT2_ENABLED=${TTS_STYLETT2_ENABLED:-false}
       - OAUTH2_GOOGLE_CLIENT_ID=${OAUTH2_GOOGLE_CLIENT_ID}
       - OAUTH2_GOOGLE_CLIENT_SECRET=${OAUTH2_GOOGLE_CLIENT_SECRET}
       - OAUTH2_GITHUB_CLIENT_ID=${OAUTH2_GITHUB_CLIENT_ID}
@@ -66,6 +60,7 @@ services:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=http://langfuse:3001
+      - HF_TOKEN=${HF_TOKEN}
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,6 +70,59 @@ services:
       - ai_network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    <<: *logging
+    restart: unless-stopped
+
+  # ─── STT Service (Faster-Whisper, GPU) ──────────────────────────────────────
+  stt-service:
+    build:
+      context: ./stt-service
+      dockerfile: Dockerfile
+    ports:
+      - "8010:8010"
+    volumes:
+      - /models/stt:/models/stt:ro
+    environment:
+      - WHISPER_MODEL_PATH=${WHISPER_MODEL_PATH:-/models/stt/whisper-large-v3-turbo}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cuda}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-float16}
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    <<: [*gpu, *logging]
+    restart: unless-stopped
+
+  # ─── TTS Service (XTTS V2 + Kokoro + StyleTTS2, GPU) ───────────────────────
+  tts-service:
+    build:
+      context: ./tts-service
+      dockerfile: Dockerfile
+    ports:
+      - "8020:8020"
+    volumes:
+      - /models/tts:/models/tts:ro
+      - /data/voices:/data/voices:ro
+    environment:
+      - XTTS_MODEL_PATH=${XTTS_MODEL_PATH:-/models/tts/xtts-v2}
+      - KOKORO_MODEL_PATH=${KOKORO_MODEL_PATH:-/models/tts/kokoro-v1}
+      - STYLETT2_MODEL_PATH=${STYLETT2_MODEL_PATH:-/models/tts/stylett2-en}
+      - VOICES_PATH=${VOICES_PATH:-/data/voices}
+      - TTS_XTTS_ENABLED=${TTS_XTTS_ENABLED:-true}
+      - TTS_KOKORO_ENABLED=${TTS_KOKORO_ENABLED:-true}
+      - TTS_STYLETT2_ENABLED=${TTS_STYLETT2_ENABLED:-false}
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8020/health"]
       interval: 30s
       timeout: 10s
       retries: 3

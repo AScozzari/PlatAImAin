@@ -46,44 +46,24 @@ async def initialize() -> None:
         from gateway.db.postgres import execute
         await execute(seed_sql)
 
-    # 6. Load Type B models concurrently
-    tasks = []
-
-    if settings.stt_enabled:
-        logger.info("Queuing Faster-Whisper load...")
-        from gateway.models.stt.faster_whisper_wrapper import FasterWhisperWrapper
-        tasks.append(FasterWhisperWrapper.get_instance())
-
-    if settings.tts_xtts_enabled:
-        logger.info("Queuing XTTS V2 load...")
-        from gateway.models.tts.xtts_wrapper import XTTSWrapper
-        tasks.append(XTTSWrapper.get_instance())
-
-    if settings.tts_kokoro_enabled:
-        logger.info("Queuing Kokoro TTS load...")
-        from gateway.models.tts.kokoro_wrapper import KokoroWrapper
-        tasks.append(KokoroWrapper.get_instance())
-
-    if settings.tts_stylett2_enabled:
-        logger.info("Queuing StyleTTS2 load...")
-        from gateway.models.tts.stylett2_wrapper import StyleTTS2Wrapper
-        tasks.append(StyleTTS2Wrapper.get_instance())
-
-    if tasks:
-        logger.info("Loading %d Type B model(s) concurrently (this may take a while)...", len(tasks))
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error("Failed to load a Type B model: %s", result)
+    # 6. Init Session Manager (round-robin load balancing across model sessions)
+    logger.info("Initializing Session Manager...")
+    from gateway.db.postgres import get_pool
+    from gateway.db.redis import get_redis
+    from gateway.services import session_manager
+    await session_manager.init(get_pool(), get_redis())
 
     _ready = True
-    logger.info("Gateway ready — all models loaded")
+    logger.info("Gateway ready — pure HTTP proxy, no embedded models")
 
 
 async def shutdown() -> None:
     global _ready
     _ready = False
     logger.info("Shutting down...")
+
+    from gateway.services import session_manager
+    await session_manager.shutdown()
 
     from gateway.db.postgres import close_db
     from gateway.db.redis import close_redis

@@ -1,11 +1,19 @@
+"""
+POST /v1/audio/speech — HTTP proxy to tts-service.
+
+The gateway resolves the model, picks a running tts-service session,
+then forwards the JSON payload verbatim.  Character count for usage
+tracking comes from the X-Characters-Count response header.
+"""
+
 import asyncio
-import io
 import logging
 import uuid
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from gateway.services import tracking
@@ -22,6 +30,15 @@ MEDIA_TYPES = {
     "opus": "audio/ogg",
 }
 
+_http: httpx.AsyncClient | None = None
+
+
+def _get_http() -> httpx.AsyncClient:
+    global _http
+    if _http is None:
+        _http = httpx.AsyncClient(timeout=180.0)
+    return _http
+
 
 class SpeechRequest(BaseModel):
     model: str = "tts-1"
@@ -30,10 +47,12 @@ class SpeechRequest(BaseModel):
     language: str = "it"
     speed: float = 1.0
     response_format: str = "mp3"
-    # StyleTTS2 extra params
+    # StyleTTS2 / XTTS extra params
     alpha: Optional[float] = None
     beta: Optional[float] = None
     diffusion_steps: Optional[int] = None
+    # Optional path for voice-cloning WAV (resolved from tenant voices DB)
+    speaker_wav_path: Optional[str] = None
 
 
 @router.post("/v1/audio/speech")
@@ -42,7 +61,6 @@ async def speech(req: SpeechRequest, request: Request):
     request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
 
     if not req.input:
-        from fastapi.responses import JSONResponse
         return JSONResponse(
             status_code=400,
             content={"error": {"type": "invalid_request_error", "message": "input is required"}},
@@ -52,88 +70,80 @@ async def speech(req: SpeechRequest, request: Request):
     from gateway.services.router import get_router
     model_router = get_router()
     resolved = model_router.resolve(req.model, tenant.get("plan", "starter"))
-    model_id = resolved.model_id
 
-    # Get custom voice path for this tenant (if any)
+    # Resolve custom voice path for tenant (voice cloning)
     voice_wav_path = await get_tenant_voice_path(tenant["id"], req.voice)
 
-    params = {
+    # Pick a backend
+    from gateway.services import session_manager
+    backend_url = await session_manager.next_backend(resolved.model_id, category="tts")
+
+    if not backend_url:
+        return JSONResponse(
+            status_code=503,
+            content={"error": {"type": "server_error", "message": "No TTS session running — start a session first"}},
+        )
+
+    # Build payload for tts-service (superset of OpenAI speech API)
+    payload = {
+        "model": resolved.model_id,
+        "input": req.input,
+        "voice": req.voice,
         "language": req.language,
         "speed": req.speed,
-        "voice": req.voice,
+        "response_format": req.response_format,
     }
     if req.alpha is not None:
-        params["alpha"] = req.alpha
+        payload["alpha"] = req.alpha
     if req.beta is not None:
-        params["beta"] = req.beta
+        payload["beta"] = req.beta
     if req.diffusion_steps is not None:
-        params["diffusion_steps"] = req.diffusion_steps
+        payload["diffusion_steps"] = req.diffusion_steps
+    if voice_wav_path:
+        payload["speaker_wav_path"] = voice_wav_path
 
-    audio_bytes = await _dispatch_tts(model_id, req.input, params, voice_wav_path)
+    # Forward to tts-service
+    try:
+        resp = await _get_http().post(
+            f"{backend_url}/v1/audio/speech",
+            json=payload,
+            headers={"X-Request-ID": request_id},
+        )
+    except httpx.RequestError as e:
+        logger.error("TTS backend %s unreachable: %s", backend_url, e)
+        return JSONResponse(
+            status_code=502,
+            content={"error": {"type": "server_error", "message": "TTS backend unavailable"}},
+        )
 
-    # Convert to requested format if needed (wav is native output)
-    if req.response_format == "mp3":
-        audio_bytes = await _wav_to_mp3(audio_bytes)
+    if resp.status_code >= 400:
+        return JSONResponse(
+            status_code=resp.status_code,
+            content=resp.json() if "application/json" in resp.headers.get("content-type", "") else
+                    {"error": {"type": "server_error", "message": "TTS backend error"}},
+        )
 
-    # Track usage
+    # Extract character count for usage tracking
+    chars = len(req.input)
+    try:
+        chars = int(resp.headers.get("X-Characters-Count", chars))
+    except (ValueError, TypeError):
+        pass
+
     asyncio.create_task(
         tracking.record_usage(
             tenant_id=tenant["id"],
-            model_id=model_id,
+            model_id=resolved.model_id,
             category="tts",
-            characters_count=len(req.input),
+            characters_count=chars,
             request_id=request_id,
         )
     )
 
     media_type = MEDIA_TYPES.get(req.response_format, "audio/wav")
     return Response(
-        content=audio_bytes,
+        content=resp.content,
+        status_code=200,
         media_type=media_type,
         headers={"X-Request-ID": request_id},
     )
-
-
-async def _dispatch_tts(
-    model_id: str, text: str, params: dict, voice_wav_path: Optional[str]
-) -> bytes:
-    if model_id == "xtts-v2":
-        from gateway.models.tts.xtts_wrapper import XTTSWrapper
-        wrapper = await XTTSWrapper.get_instance()
-        return await wrapper.synthesize(text, params, voice_wav_path=voice_wav_path)
-
-    elif model_id == "kokoro-v1":
-        from gateway.models.tts.kokoro_wrapper import KokoroWrapper
-        wrapper = await KokoroWrapper.get_instance()
-        return await wrapper.synthesize(text, params)
-
-    elif model_id == "stylett2-en":
-        from gateway.models.tts.stylett2_wrapper import StyleTTS2Wrapper
-        wrapper = await StyleTTS2Wrapper.get_instance()
-        return await wrapper.synthesize(text, params)
-
-    else:
-        # Default fallback to XTTS
-        from gateway.models.tts.xtts_wrapper import XTTSWrapper
-        wrapper = await XTTSWrapper.get_instance()
-        return await wrapper.synthesize(text, params, voice_wav_path=voice_wav_path)
-
-
-async def _wav_to_mp3(wav_bytes: bytes) -> bytes:
-    """Convert WAV to MP3 using pydub (wraps ffmpeg)."""
-    try:
-        import asyncio
-        from pydub import AudioSegment
-
-        def convert():
-            import io
-            audio = AudioSegment.from_wav(io.BytesIO(wav_bytes))
-            buf = io.BytesIO()
-            audio.export(buf, format="mp3", bitrate="128k")
-            return buf.getvalue()
-
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, convert)
-    except Exception as e:
-        logger.warning("MP3 conversion failed, returning WAV: %s", e)
-        return wav_bytes
