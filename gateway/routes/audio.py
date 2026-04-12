@@ -60,9 +60,12 @@ async def transcribe(
             content={"error": {"type": "invalid_request_error", "message": "File exceeds 25MB limit"}},
         )
 
-    # Pick a backend from session manager
+    # Pick a backend from session manager (with optional conversation affinity)
+    conversation_id = request.headers.get("X-Conversation-ID")
     from gateway.services import session_manager
-    backend_url = await session_manager.next_backend(resolved.model_id, category="stt")
+    backend_url = await session_manager.next_backend(
+        resolved.model_id, category="stt", conversation_id=conversation_id
+    )
 
     if not backend_url:
         return JSONResponse(
@@ -123,6 +126,20 @@ async def transcribe(
         )
     )
 
+    # PII check on transcript for audit header (no tokenization on audio input)
+    resp_headers = {"X-Request-ID": request_id}
+    try:
+        from gateway.services import pii_tokenizer
+        content_type_check = resp.headers.get("content-type", "")
+        if "application/json" in content_type_check:
+            transcript_data = resp.json()
+            transcript_text = transcript_data.get("text", "")
+            if transcript_text and pii_tokenizer.has_pii(transcript_text):
+                resp_headers["X-PII-Detected"] = "true"
+                logger.info("PII detected in STT transcript for request %s", request_id)
+    except Exception:
+        pass
+
     # Return the stt-service response as-is
     content_type = resp.headers.get("content-type", "application/json")
     if "text/plain" in content_type:
@@ -133,5 +150,5 @@ async def transcribe(
         content=resp.content,
         status_code=200,
         media_type=content_type,
-        headers={"X-Request-ID": request_id},
+        headers=resp_headers,
     )

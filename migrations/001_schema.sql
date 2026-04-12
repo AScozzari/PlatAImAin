@@ -239,3 +239,109 @@ DO $$ BEGIN
         BEFORE UPDATE ON model_sessions
         FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ─── Platform Settings (cifrate AES-256 nel gateway) ─────────────────────────
+-- Chiavi: s3.*, runpod.*, registry.*, general.*
+CREATE TABLE IF NOT EXISTS platform_settings (
+    key         VARCHAR(100) PRIMARY KEY,
+    value       TEXT NOT NULL,              -- JSON cifrato con AES-256
+    category    VARCHAR(50) NOT NULL,       -- s3 | runpod | registry | general
+    description VARCHAR(500),
+    updated_by  VARCHAR(255),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── Pod Definitions ──────────────────────────────────────────────────────────
+-- Un pod RunPod = immagine Docker + modello precaricato su Network Volume
+-- 1 pod definition = 1 configurazione di deployment
+CREATE TABLE IF NOT EXISTS pod_definitions (
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                 VARCHAR(100) NOT NULL,
+    model_id             VARCHAR(100) NOT NULL REFERENCES models(id),
+    worker_type          VARCHAR(20) NOT NULL DEFAULT 'vllm',
+    -- vllm | stt_worker | tts_worker | custom
+
+    -- RunPod identifiers
+    runpod_pod_id        VARCHAR(100),      -- NULL finché non creato su RunPod
+    runpod_template_id   VARCHAR(100),
+    docker_image         VARCHAR(300) NOT NULL,  -- es. ghcr.io/org/vllm-qwen:tag
+    network_volume_id    VARCHAR(100),      -- RunPod Network Volume (pesi modello)
+
+    -- Hardware (da gpuTypes GraphQL query RunPod)
+    gpu_type             VARCHAR(50),       -- A100_SXM4_80GB | RTX4090 | ecc.
+    gpu_count            INT NOT NULL DEFAULT 1,
+    vram_gb              FLOAT NOT NULL,
+    container_disk_gb    INT NOT NULL DEFAULT 20,
+    region               VARCHAR(50) NOT NULL DEFAULT 'EU',
+
+    -- Lifecycle policy
+    session_type         VARCHAR(20) NOT NULL DEFAULT 'idle',
+    -- idle       = spegni dopo idle_timeout_minutes di inattività
+    -- persistent = mai spegnere (always-on)
+    -- fallback   = attiva solo se tutti gli altri sono saturi/in errore
+    -- scheduled  = finestre orarie (cron) + pre-warm
+    idle_timeout_minutes INT NOT NULL DEFAULT 30,
+    schedule_cron        VARCHAR(50),       -- es. "0 8 * * 1-5" (lun-ven ore 8)
+    schedule_stop_cron   VARCHAR(50),       -- es. "0 20 * * 1-5" (lun-ven ore 20)
+    prewarm_minutes      INT NOT NULL DEFAULT 15,
+    priority             INT NOT NULL DEFAULT 100,
+    -- priorità nel pool: più basso = preferito
+
+    -- Runtime state (aggiornato dal session manager)
+    pod_status           VARCHAR(20) NOT NULL DEFAULT 'stopped',
+    -- stopped | starting | running | error | scaling
+    backend_url          VARCHAR(500),      -- endpoint quando running
+    last_request_at      TIMESTAMPTZ,
+    started_at           TIMESTAMPTZ,
+    started_by           VARCHAR(255),
+    extra_config         JSONB NOT NULL DEFAULT '{}',
+
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pod_def_model   ON pod_definitions(model_id, pod_status);
+CREATE INDEX IF NOT EXISTS idx_pod_def_type    ON pod_definitions(session_type, pod_status);
+CREATE INDEX IF NOT EXISTS idx_pod_def_worker  ON pod_definitions(worker_type, pod_status);
+
+DO $$ BEGIN
+    CREATE TRIGGER trg_pod_definitions_updated_at
+        BEFORE UPDATE ON pod_definitions
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ─── Conversations (sessione logica multi-componente) ─────────────────────────
+-- Una conversazione vocale = STT + LLM + TTS assegnati con affinity
+CREATE TABLE IF NOT EXISTS conversations (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id     UUID NOT NULL REFERENCES tenants(id),
+    warm_state    VARCHAR(20) NOT NULL DEFAULT 'active',
+    -- active | idle | closed
+    last_activity TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    metadata      JSONB NOT NULL DEFAULT '{}',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_tenant   ON conversations(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_activity ON conversations(last_activity DESC);
+
+-- ─── Conversation Workers (session affinity: conv → pod pinned) ──────────────
+CREATE TABLE IF NOT EXISTS conversation_workers (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id   UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    model_class       VARCHAR(20) NOT NULL,  -- llm | stt | tts
+    pod_definition_id UUID NOT NULL REFERENCES pod_definitions(id),
+    model_id          VARCHAR(100) NOT NULL,
+    last_activity     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(conversation_id, model_class)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_workers_conv ON conversation_workers(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_conv_workers_pod  ON conversation_workers(pod_definition_id);
+
+-- ─── token_usage — aggiunta colonne compute cost ─────────────────────────────
+ALTER TABLE token_usage ADD COLUMN IF NOT EXISTS pod_definition_id UUID REFERENCES pod_definitions(id);
+ALTER TABLE token_usage ADD COLUMN IF NOT EXISTS compute_cost_micro INT NOT NULL DEFAULT 0;
+-- costo GPU-hour × tariffa RunPod in micro-EUR
+ALTER TABLE token_usage ADD COLUMN IF NOT EXISTS gpu_seconds FLOAT NOT NULL DEFAULT 0;

@@ -139,6 +139,40 @@ export const adminApi = {
     max_results?: number;
     compatible_only?: boolean;
   }) => api.get("/admin/models/search", { params }),
+
+  // Pod Definitions
+  listPods: (params?: { model_id?: string; worker_type?: string }) =>
+    api.get("/admin/pods", { params }),
+  getPod: (id: string) => api.get(`/admin/pods/${id}`),
+  createPod: (data: object) => api.post("/admin/pods", data),
+  updatePod: (id: string, data: object) => api.patch(`/admin/pods/${id}`, data),
+  deletePod: (id: string) => api.delete(`/admin/pods/${id}`),
+  startPod: (id: string) => api.post(`/admin/pods/${id}/start`),
+  stopPod: (id: string) => api.post(`/admin/pods/${id}/stop`),
+  terminatePod: (id: string) => api.post(`/admin/pods/${id}/terminate`),
+  createPodOnRunpod: (id: string) => api.post(`/admin/pods/${id}/create-on-runpod`),
+  getPodMetrics: (id: string) => api.get(`/admin/pods/${id}/metrics`),
+  listGpuTypes: () => api.get("/admin/gpu-types"),
+
+  // Platform Settings
+  listSettings: () => api.get("/admin/settings"),
+  getSetting: (key: string) => api.get(`/admin/settings/${key}`),
+  upsertSetting: (key: string, data: { value: string; category: string; description?: string }) =>
+    api.put(`/admin/settings/${key}`, data),
+  upsertSettingsBulk: (data: { settings: Record<string, string>; category: string }) =>
+    api.put("/admin/settings-bulk", data),
+  deleteSetting: (key: string) => api.delete(`/admin/settings/${key}`),
+  testS3: () => api.post("/admin/settings/s3/test"),
+  testRunpod: () => api.post("/admin/settings/runpod/test"),
+  getPiiToggles: () => api.get("/admin/settings/pii/toggles"),
+  togglePii: (entity_type: string, enabled: boolean) =>
+    api.post("/admin/settings/pii/toggle", { entity_type, enabled }),
+
+  // Conversations
+  listConversations: (params?: { tenant_id?: string; warm_state?: string }) =>
+    api.get("/admin/conversations", { params }),
+  getConversation: (id: string) => api.get(`/admin/conversations/${id}`),
+  releaseConversation: (id: string) => api.delete(`/admin/conversations/${id}/workers`),
 };
 
 export const authApi = {

@@ -14,6 +14,9 @@ import { ModelList } from "@/pages/models/ModelList";
 import { ModelPricing } from "@/pages/models/ModelPricing";
 import { ModelSearch } from "@/pages/models/ModelSearch";
 import { HealthDashboard } from "@/pages/health/HealthDashboard";
+import { PodList } from "@/pages/pods/PodList";
+import { ConversationList } from "@/pages/conversations/ConversationList";
+import { PlatformSettings } from "@/pages/settings/PlatformSettings";
 
 export default function App() {
   return (
@@ -41,6 +44,9 @@ export default function App() {
           <Route path="models/search" element={<ModelSearch />} />
           <Route path="models/:id/pricing" element={<ModelPricing />} />
           <Route path="health" element={<HealthDashboard />} />
+          <Route path="pods" element={<PodList />} />
+          <Route path="conversations" element={<ConversationList />} />
+          <Route path="settings" element={<PlatformSettings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

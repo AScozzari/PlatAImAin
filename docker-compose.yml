@@ -61,6 +61,16 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=http://langfuse:3001
       - HF_TOKEN=${HF_TOKEN}
+      # Platform settings encryption
+      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY}
+      # RunPod (can also be set via /admin/settings)
+      - RUNPOD_API_KEY=${RUNPOD_API_KEY}
+      # S3 (can also be set via /admin/settings)
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+      - S3_REGION=${S3_REGION:-eu-west-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -234,6 +244,36 @@ services:
     networks:
       - ai_network
     <<: [*gpu, *logging]
+    restart: unless-stopped
+
+  # ─── Docker Registry (self-hosted, S3-backed) ─────────────────────────────
+  # Pulls from registry.plataimain.internal:5001 — static credentials, no rotation
+  registry:
+    image: registry:2
+    ports:
+      - "5001:5000"
+    environment:
+      # Storage driver: S3-compatible
+      - REGISTRY_STORAGE=s3
+      - REGISTRY_STORAGE_S3_ACCESSKEY=${S3_ACCESS_KEY_ID}
+      - REGISTRY_STORAGE_S3_SECRETKEY=${S3_SECRET_ACCESS_KEY}
+      - REGISTRY_STORAGE_S3_REGION=${S3_REGION:-eu-west-1}
+      - REGISTRY_STORAGE_S3_BUCKET=${S3_BUCKET_NAME}
+      - REGISTRY_STORAGE_S3_ROOTDIRECTORY=/docker
+      # If using S3-compatible (MinIO/R2), set the endpoint
+      - REGISTRY_STORAGE_S3_REGIONENDPOINT=${S3_ENDPOINT_URL}
+      # Auth: HTTP basic (static credentials — no rotation needed)
+      - REGISTRY_AUTH=htpasswd
+      - REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm
+      - REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd
+      # TLS: offloaded to nginx/proxy
+      - REGISTRY_HTTP_ADDR=0.0.0.0:5000
+      - REGISTRY_LOG_LEVEL=info
+    volumes:
+      - ./registry/auth:/auth:ro   # htpasswd file generated on first deploy
+    networks:
+      - ai_network
+    <<: *logging
     restart: unless-stopped
 
   # ─── PostgreSQL ─────────────────────────────────────────────────────────────

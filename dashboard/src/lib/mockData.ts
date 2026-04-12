@@ -240,6 +240,119 @@ const _mockModelSearch = {
 
 MOCK["/admin/sessions"] = _mockSessions;
 
+// ─── Pod Definitions mock ─────────────────────────────────────────────────────
+const _mockPods = {
+  pods: [
+    {
+      id: "pod-1", name: "LLM Primary (72B)", model_id: "qwen2.5-72b", worker_type: "vllm",
+      docker_image: "ghcr.io/org/vllm-qwen:latest", gpu_type: "A100_SXM4_80GB",
+      gpu_count: 1, vram_gb: 80, container_disk_gb: 20, region: "EU",
+      session_type: "persistent", idle_timeout_minutes: 30, schedule_cron: null,
+      prewarm_minutes: 15, priority: 10, network_volume_id: "vol-abc123",
+      runpod_pod_id: "rp-abc123", pod_status: "running",
+      backend_url: "https://rp-abc123-8000.proxy.runpod.net",
+      last_request_at: new Date(Date.now() - 120000).toISOString(),
+      started_at: new Date(Date.now() - 86400000).toISOString(),
+      started_by: "admin@demo.local", extra_config: {},
+      created_at: new Date(Date.now() - 86400000 * 7).toISOString(),
+      updated_at: new Date(Date.now() - 120000).toISOString(),
+    },
+    {
+      id: "pod-2", name: "STT Primary (Whisper)", model_id: "whisper-large-v3-turbo", worker_type: "stt_worker",
+      docker_image: "ghcr.io/org/stt-whisper:latest", gpu_type: "RTX4090",
+      gpu_count: 1, vram_gb: 24, container_disk_gb: 15, region: "EU",
+      session_type: "idle", idle_timeout_minutes: 20, schedule_cron: null,
+      prewarm_minutes: 10, priority: 10, network_volume_id: "vol-def456",
+      runpod_pod_id: "rp-def456", pod_status: "running",
+      backend_url: "https://rp-def456-8010.proxy.runpod.net",
+      last_request_at: new Date(Date.now() - 900000).toISOString(),
+      started_at: new Date(Date.now() - 3600000).toISOString(),
+      started_by: "admin@demo.local", extra_config: {},
+      created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+      updated_at: new Date(Date.now() - 900000).toISOString(),
+    },
+    {
+      id: "pod-3", name: "TTS Primary (XTTS)", model_id: "xtts-v2", worker_type: "tts_worker",
+      docker_image: "ghcr.io/org/tts-xtts:latest", gpu_type: "RTX4090",
+      gpu_count: 1, vram_gb: 24, container_disk_gb: 15, region: "EU",
+      session_type: "idle", idle_timeout_minutes: 20, schedule_cron: null,
+      prewarm_minutes: 10, priority: 10, network_volume_id: "vol-ghi789",
+      runpod_pod_id: "rp-ghi789", pod_status: "stopped",
+      backend_url: null,
+      last_request_at: new Date(Date.now() - 7200000).toISOString(),
+      started_at: null, started_by: null, extra_config: {},
+      created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+      updated_at: new Date(Date.now() - 7200000).toISOString(),
+    },
+    {
+      id: "pod-4", name: "LLM Scheduled (Business Hours)", model_id: "qwen2.5-32b", worker_type: "vllm",
+      docker_image: "ghcr.io/org/vllm-qwen32:latest", gpu_type: "A100_SXM4_40GB",
+      gpu_count: 1, vram_gb: 40, container_disk_gb: 20, region: "EU",
+      session_type: "scheduled", idle_timeout_minutes: 30, schedule_cron: "0 8 * * 1-5",
+      schedule_stop_cron: "0 20 * * 1-5", prewarm_minutes: 15, priority: 20,
+      network_volume_id: "vol-jkl012", runpod_pod_id: "rp-jkl012", pod_status: "stopped",
+      backend_url: null, last_request_at: null, started_at: null, started_by: null, extra_config: {},
+      created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+      updated_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    },
+  ],
+};
+
+// ─── Platform Settings mock ───────────────────────────────────────────────────
+const _mockSettings = {
+  settings: [
+    { key: "s3.access_key_id", category: "s3", description: "AWS Access Key ID", updated_by: "admin@demo.local", updated_at: new Date().toISOString() },
+    { key: "s3.secret_access_key", category: "s3", description: "AWS Secret Access Key", updated_by: "admin@demo.local", updated_at: new Date().toISOString() },
+    { key: "s3.region", category: "s3", description: "AWS Region", updated_by: "admin@demo.local", updated_at: new Date().toISOString() },
+    { key: "s3.bucket_name", category: "s3", description: "S3 Bucket Name", updated_by: "admin@demo.local", updated_at: new Date().toISOString() },
+    { key: "runpod.api_key", category: "runpod", description: "RunPod API Key", updated_by: "admin@demo.local", updated_at: new Date().toISOString() },
+  ],
+};
+
+const _mockPiiToggles = {
+  toggles: { CF: true, PIVA: true, IBAN: true, CC: true, EMAIL: true, PHONE: true, ADDRESS: true, PERSON: true },
+};
+
+// ─── Conversations mock ───────────────────────────────────────────────────────
+const _mockConversations = {
+  conversations: [
+    {
+      id: "conv-1", tenant_id: "t1", tenant_name: "Acme Corp", warm_state: "active",
+      last_activity: new Date(Date.now() - 60000).toISOString(),
+      created_at: new Date(Date.now() - 1800000).toISOString(),
+      workers: [
+        { model_class: "llm", model_id: "qwen2.5-72b", pod_name: "LLM Primary (72B)", pod_status: "running" },
+        { model_class: "stt", model_id: "whisper-large-v3-turbo", pod_name: "STT Primary (Whisper)", pod_status: "running" },
+        { model_class: "tts", model_id: "xtts-v2", pod_name: "TTS Primary (XTTS)", pod_status: "running" },
+      ],
+    },
+    {
+      id: "conv-2", tenant_id: "t2", tenant_name: "Beta SRL", warm_state: "idle",
+      last_activity: new Date(Date.now() - 1200000).toISOString(),
+      created_at: new Date(Date.now() - 3600000).toISOString(),
+      workers: [
+        { model_class: "llm", model_id: "qwen2.5-32b", pod_name: "LLM Scheduled (Business Hours)", pod_status: "stopped" },
+        { model_class: "stt", model_id: "whisper-large-v3-turbo", pod_name: "STT Primary (Whisper)", pod_status: "running" },
+      ],
+    },
+  ],
+  total: 2,
+};
+
+MOCK["/admin/pods"]          = _mockPods;
+MOCK["/admin/settings"]      = _mockSettings;
+MOCK["/admin/settings/pii/toggles"] = _mockPiiToggles;
+MOCK["/admin/conversations"] = _mockConversations;
+MOCK["/admin/gpu-types"] = {
+  gpu_types: [
+    { id: "NVIDIA_A100_SXM4_80GB", displayName: "A100 SXM4 80GB", memoryInGb: 80, securePrice: 1.89, communityPrice: 1.49 },
+    { id: "NVIDIA_A100_SXM4_40GB", displayName: "A100 SXM4 40GB", memoryInGb: 40, securePrice: 1.29, communityPrice: 0.99 },
+    { id: "NVIDIA_RTX4090", displayName: "RTX 4090", memoryInGb: 24, securePrice: 0.74, communityPrice: 0.44 },
+    { id: "NVIDIA_RTX3090", displayName: "RTX 3090", memoryInGb: 24, securePrice: 0.44, communityPrice: 0.22 },
+    { id: "NVIDIA_H100_SXM5_80GB", displayName: "H100 SXM5 80GB", memoryInGb: 80, securePrice: 2.99, communityPrice: 2.49 },
+  ],
+};
+
 export function getMockForUrl(url: string): unknown | null {
   // Strip query params
   const path = url.split("?")[0];
@@ -258,6 +371,24 @@ export function getMockForUrl(url: string): unknown | null {
       (s) => s.model_id === modelId
     );
     return { model_id: modelId, sessions };
+  }
+  // Pod detail: /admin/pods/:id
+  if (/^\/admin\/pods\/[^/]+$/.test(path) && !path.includes("/metrics")) {
+    const pods = (_mockPods.pods as { id: string }[]);
+    const id = path.split("/").pop();
+    return pods.find((p) => p.id === id) ?? pods[0];
+  }
+  // Pod metrics: /admin/pods/:id/metrics
+  if (/^\/admin\/pods\/[^/]+\/metrics$/.test(path)) {
+    return { gpu_util_percent: 72, vram_util_percent: 68, cpu_percent: 12, memory_percent: 35, vllm_queue_depth: 2 };
+  }
+  // Settings detail: /admin/settings/:key
+  if (/^\/admin\/settings\/.+$/.test(path) && !path.includes("/test") && !path.includes("/toggles") && !path.includes("/toggle")) {
+    return { key: path.split("/admin/settings/")[1], category: "general", value: "***", description: null };
+  }
+  // Conversation detail: /admin/conversations/:id
+  if (/^\/admin\/conversations\/[^/]+$/.test(path)) {
+    return (_mockConversations.conversations as { id: string }[])[0];
   }
   // Model search: /admin/models/search (has query params)
   if (path === "/admin/models/search") return _mockModelSearch;

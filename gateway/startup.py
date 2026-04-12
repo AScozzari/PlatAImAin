@@ -46,15 +46,25 @@ async def initialize() -> None:
         from gateway.db.postgres import execute
         await execute(seed_sql)
 
-    # 6. Init Session Manager (round-robin load balancing across model sessions)
+    # 6. Init Session Manager
     logger.info("Initializing Session Manager...")
     from gateway.db.postgres import get_pool
     from gateway.db.redis import get_redis
     from gateway.services import session_manager
     await session_manager.init(get_pool(), get_redis())
 
+    # 7. Init PII Tokenizer (inject Redis for mapping storage)
+    logger.info("Initializing PII Tokenizer...")
+    from gateway.services import pii_tokenizer
+    pii_tokenizer.init(get_redis())
+
+    # 8. Load platform settings (S3, RunPod, PII toggles) from DB
+    logger.info("Loading platform settings from DB...")
+    from gateway.routes.admin.settings_admin import load_settings_on_startup
+    await load_settings_on_startup()
+
     _ready = True
-    logger.info("Gateway ready — pure HTTP proxy, no embedded models")
+    logger.info("Gateway ready — pure HTTP proxy + pod orchestrator")
 
 
 async def shutdown() -> None:

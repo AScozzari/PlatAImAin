@@ -39,3 +39,12 @@ langfuse==2.30.0
 
 # ─── HuggingFace (for model downloads) ───────────────────────────────────────
 huggingface-hub==0.27.1
+
+# ─── Encryption (platform_settings AES-256-GCM) ──────────────────────────────
+cryptography==44.0.0
+
+# ─── AWS S3 / S3-compatible storage ──────────────────────────────────────────
+boto3==1.35.0
+
+# ─── Cron parsing (scheduled sessions) ───────────────────────────────────────
+croniter==5.0.1

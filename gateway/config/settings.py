@@ -98,6 +98,33 @@ class Settings(BaseSettings):
     # Proxy HTTP timeout
     proxy_timeout_seconds: int = 300
 
+    # Platform settings encryption (AES-256-GCM)
+    # Must be a base64url-encoded 32-byte key: python -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+    settings_encryption_key: str = "CHANGE_ME_generate_32_byte_base64url_key"
+
+    # RunPod integration
+    runpod_api_key: Optional[str] = None
+    runpod_default_region: str = "EU"
+    runpod_network_volume_id: Optional[str] = None
+    runpod_saturation_threshold: int = 5  # vllm:num_requests_waiting > N → scale
+
+    # AWS S3 / S3-compatible storage
+    s3_access_key_id: Optional[str] = None
+    s3_secret_access_key: Optional[str] = None
+    s3_region: str = "eu-west-1"
+    s3_bucket_name: Optional[str] = None
+    s3_endpoint_url: Optional[str] = None  # None = AWS; set for MinIO/R2
+
+    # Docker Registry
+    registry_url: Optional[str] = None
+    registry_username: Optional[str] = None
+    registry_password: Optional[str] = None
+
+    # Session manager tuning
+    idle_check_interval_seconds: int = 300   # every 5 min
+    schedule_check_interval_seconds: int = 60  # every 1 min
+    health_check_interval_seconds: int = 30
+
     def get_rate_limit(self, plan: str) -> int:
         return {
             "starter": self.rate_limit_starter,

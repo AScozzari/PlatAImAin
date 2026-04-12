@@ -74,9 +74,20 @@ async def speech(req: SpeechRequest, request: Request):
     # Resolve custom voice path for tenant (voice cloning)
     voice_wav_path = await get_tenant_voice_path(tenant["id"], req.voice)
 
-    # Pick a backend
+    # Pick a backend (with optional conversation affinity)
+    conversation_id = request.headers.get("X-Conversation-ID")
     from gateway.services import session_manager
-    backend_url = await session_manager.next_backend(resolved.model_id, category="tts")
+    backend_url = await session_manager.next_backend(
+        resolved.model_id, category="tts", conversation_id=conversation_id
+    )
+
+    # PII check on input — log for audit (do not tokenize: TTS must speak real text)
+    try:
+        from gateway.services import pii_tokenizer
+        if req.input and pii_tokenizer.has_pii(req.input):
+            logger.info("PII detected in TTS input for request %s", request_id)
+    except Exception:
+        pass
 
     if not backend_url:
         return JSONResponse(
