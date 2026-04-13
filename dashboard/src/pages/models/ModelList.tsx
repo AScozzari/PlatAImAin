@@ -4,9 +4,12 @@ import { Link } from "react-router-dom";
 import { adminApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
-  RefreshCw, DollarSign, Plus, Archive, RotateCcw,
+  RefreshCw, Plus, Archive, RotateCcw,
   ChevronDown, ChevronUp, Play, Square, Search, X,
+  Save, Loader2, History,
 } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Capabilities = {
   tool_calling?: boolean;
@@ -37,13 +40,21 @@ type Session = {
   started_at: string | null;
 };
 
+type PricingRow = {
+  model_id: string;
+  input_cost_per_1k_micro: number;
+  output_cost_per_1k_micro: number;
+};
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const CATEGORY_COLORS: Record<string, string> = {
-  llm: "bg-blue-100 text-blue-700",
+  llm:       "bg-blue-100 text-blue-700",
   reasoning: "bg-purple-100 text-purple-700",
-  coding: "bg-cyan-100 text-cyan-700",
-  vision: "bg-green-100 text-green-700",
-  stt: "bg-amber-100 text-amber-700",
-  tts: "bg-orange-100 text-orange-700",
+  coding:    "bg-cyan-100 text-cyan-700",
+  vision:    "bg-green-100 text-green-700",
+  stt:       "bg-amber-100 text-amber-700",
+  tts:       "bg-orange-100 text-orange-700",
   embedding: "bg-gray-100 text-gray-700",
 };
 
@@ -62,7 +73,101 @@ const EMPTY_SESSION_FORM = {
   max_model_len: "",
 };
 
-// ─── Session badge ────────────────────────────────────────────────────────────
+// ─── Pricing helpers ──────────────────────────────────────────────────────────
+
+function eurToMicro(eurStr: string): number {
+  const v = parseFloat(eurStr);
+  if (isNaN(v) || v < 0) return 0;
+  return Math.round(v * 1_000_000);
+}
+
+function microToEurDisplay(micro: number): string {
+  if (micro === 0) return "—";
+  const eur = micro / 1_000_000;
+  if (eur >= 0.001)    return `€${eur.toFixed(4)}`;
+  if (eur >= 0.00001)  return `€${eur.toFixed(6)}`;
+  return `€${eur.toFixed(8)}`;
+}
+
+// ─── PriceCell — inline editable price ───────────────────────────────────────
+
+function PriceCell({
+  modelId,
+  field,
+  valueMicro,
+  onSaved,
+}: {
+  modelId: string;
+  field: "input" | "output";
+  valueMicro: number;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: (micro: number) =>
+      adminApi.updatePricing(modelId, {
+        ...(field === "input"
+          ? { input_cost_per_1k_micro: micro }
+          : { output_cost_per_1k_micro: micro }),
+      }),
+    onSuccess: () => { setEditing(false); onSaved(); },
+  });
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => {
+          setDraft(valueMicro === 0 ? "" : (valueMicro / 1_000_000).toFixed(7).replace(/\.?0+$/, ""));
+          setEditing(true);
+        }}
+        className="group text-left font-mono text-xs hover:bg-blue-50 hover:text-blue-700 rounded px-1.5 py-1 transition-colors block whitespace-nowrap w-full"
+        title="Click per modificare (€ per 1K unità)"
+      >
+        {valueMicro === 0
+          ? <span className="text-gray-300 italic">imposta</span>
+          : microToEurDisplay(valueMicro)}
+        <span className="text-gray-300 group-hover:text-blue-400 ml-1 text-[10px]">✎</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <div className="relative">
+        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">€</span>
+        <input
+          autoFocus
+          type="number"
+          min={0}
+          step="0.0000001"
+          value={draft}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") mutation.mutate(eurToMicro(draft));
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className="w-24 pl-4 pr-1 py-0.5 border rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+          placeholder="0.0005"
+        />
+      </div>
+      <button
+        onClick={() => mutation.mutate(eurToMicro(draft))}
+        disabled={mutation.isPending}
+        className="p-0.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+        title="Salva"
+      >
+        {mutation.isPending
+          ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+          : <Save className="h-2.5 w-2.5" />}
+      </button>
+      <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+    </div>
+  );
+}
+
+// ─── SessionBadge ─────────────────────────────────────────────────────────────
 
 function SessionBadge({ sessions }: { sessions: Session[] }) {
   const running = sessions.filter((s) => s.status === "running");
@@ -92,15 +197,9 @@ function SessionBadge({ sessions }: { sessions: Session[] }) {
   );
 }
 
-// ─── Start Session Modal ──────────────────────────────────────────────────────
+// ─── StartSessionModal ────────────────────────────────────────────────────────
 
-function StartSessionModal({
-  modelId,
-  onClose,
-}: {
-  modelId: string;
-  onClose: () => void;
-}) {
+function StartSessionModal({ modelId, onClose }: { modelId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [form, setForm] = useState(EMPTY_SESSION_FORM);
   const [error, setError] = useState<string | null>(null);
@@ -113,10 +212,7 @@ function StartSessionModal({
         tensor_parallel_size: form.tensor_parallel_size,
         max_model_len: form.max_model_len ? Number(form.max_model_len) : undefined,
       }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sessions"] });
-      onClose();
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["sessions"] }); onClose(); },
     onError: (e: unknown) => {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Errore avvio sessione");
     },
@@ -127,70 +223,45 @@ function StartSessionModal({
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-800">Avvia Sessione — {modelId}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
         </div>
-
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Backend URL *</label>
-            <input
-              value={form.backend_url}
-              onChange={(e) => setForm({ ...form, backend_url: e.target.value })}
+            <input value={form.backend_url} onChange={(e) => setForm({ ...form, backend_url: e.target.value })}
               className="w-full px-3 py-1.5 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="http://gpu0:8001"
-            />
+              placeholder="http://gpu0:8001" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">GPU IDs (comma-separated)</label>
-            <input
-              value={form.gpu_ids}
-              onChange={(e) => setForm({ ...form, gpu_ids: e.target.value })}
+            <input value={form.gpu_ids} onChange={(e) => setForm({ ...form, gpu_ids: e.target.value })}
               className="w-full px-3 py-1.5 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="0 or 0,1 for tensor parallel"
-            />
+              placeholder="0 or 0,1 for tensor parallel" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Tensor Parallel Size</label>
-              <input
-                type="number"
-                min={1}
-                value={form.tensor_parallel_size}
+              <input type="number" min={1} value={form.tensor_parallel_size}
                 onChange={(e) => setForm({ ...form, tensor_parallel_size: Number(e.target.value) })}
-                className="w-full px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+                className="w-full px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Max Model Len</label>
-              <input
-                type="number"
-                value={form.max_model_len}
+              <input type="number" value={form.max_model_len}
                 onChange={(e) => setForm({ ...form, max_model_len: e.target.value })}
                 className="w-full px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="opzionale"
-              />
+                placeholder="opzionale" />
             </div>
           </div>
         </div>
-
-        {error && (
-          <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{error}</p>
-        )}
-
+        {error && <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{error}</p>}
         <div className="flex gap-3 mt-5">
-          <button
-            onClick={() => startMutation.mutate()}
-            disabled={!form.backend_url || startMutation.isPending}
-            className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
-          >
+          <button onClick={() => startMutation.mutate()} disabled={!form.backend_url || startMutation.isPending}
+            className="flex-1 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors">
             {startMutation.isPending ? "Avvio…" : "Avvia"}
           </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
+          <button onClick={onClose}
+            className="px-4 py-2 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             Annulla
           </button>
         </div>
@@ -220,6 +291,14 @@ export function ModelList() {
     refetchInterval: 15_000,
   });
 
+  // Load pricing for all models
+  const { data: pricingData } = useQuery({
+    queryKey: ["pricing"],
+    queryFn: () => adminApi.listPricing().then((r) => r.data.pricing ?? []),
+  });
+  const pricingFor = (modelId: string): PricingRow | undefined =>
+    (pricingData ?? []).find((p: PricingRow) => p.model_id === modelId);
+
   const reloadMutation = useMutation({
     mutationFn: () => adminApi.reloadModels(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["models"] }),
@@ -237,11 +316,7 @@ export function ModelList() {
 
   const createMutation = useMutation({
     mutationFn: (d: object) => adminApi.createModel(d),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["models"] });
-      setShowForm(false);
-      setForm(EMPTY_FORM);
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["models"] }); setShowForm(false); setForm(EMPTY_FORM); },
     onError: (e: unknown) => {
       setFormError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Errore creazione modello");
     },
@@ -253,8 +328,7 @@ export function ModelList() {
   });
 
   const allSessions: Session[] = sessionsData?.sessions ?? [];
-  const sessionsByModel = (modelId: string) =>
-    allSessions.filter((s) => s.model_id === modelId);
+  const sessionsByModel = (modelId: string) => allSessions.filter((s) => s.model_id === modelId);
 
   const allModels: Model[] = data?.models ?? [];
   const active = allModels.filter((m) => !m.deprecated && m.is_active);
@@ -263,32 +337,34 @@ export function ModelList() {
   const handleCreate = () => {
     setFormError(null);
     createMutation.mutate({
-      id: form.id,
-      name: form.name,
-      category: form.category,
-      tier: form.tier,
+      id: form.id, name: form.name, category: form.category, tier: form.tier,
       min_plan: form.min_plan,
       vram_gb: form.vram_gb ? Number(form.vram_gb) : null,
       hf_repo: form.hf_repo || null,
       capabilities: {
-        tool_calling: form.tool_calling,
-        streaming: form.streaming,
-        vision: form.vision,
-        batch_input: form.batch_input,
+        tool_calling: form.tool_calling, streaming: form.streaming,
+        vision: form.vision, batch_input: form.batch_input,
       },
     });
   };
 
+  // ─── Table ─────────────────────────────────────────────────────────────────
   const ModelTable = ({ models, allowDeprecate }: { models: Model[]; allowDeprecate: boolean }) => (
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b bg-gray-50">
-          <th className="text-left px-4 py-3 font-medium text-gray-600">Model ID</th>
+          <th className="text-left px-4 py-3 font-medium text-gray-600">Modello</th>
           <th className="text-left px-4 py-3 font-medium text-gray-600">Categoria</th>
           <th className="text-left px-4 py-3 font-medium text-gray-600">Sessione</th>
-          <th className="text-left px-4 py-3 font-medium text-gray-600">Tier</th>
+          <th className="text-left px-4 py-3 font-medium text-gray-600">
+            €/1K Input
+            <span className="block text-[10px] font-normal text-gray-400">click per modificare</span>
+          </th>
+          <th className="text-left px-4 py-3 font-medium text-gray-600">
+            €/1K Output
+            <span className="block text-[10px] font-normal text-gray-400">click per modificare</span>
+          </th>
           <th className="text-right px-4 py-3 font-medium text-gray-600">VRAM</th>
-          <th className="text-left px-4 py-3 font-medium text-gray-600">Capabilities</th>
           <th className="px-4 py-3" />
         </tr>
       </thead>
@@ -296,6 +372,7 @@ export function ModelList() {
         {models.map((m) => {
           const sessions = sessionsByModel(m.id);
           const runningSessions = sessions.filter((s) => s.status === "running");
+          const pricing = pricingFor(m.id);
           return (
             <tr key={m.id} className={cn("border-b last:border-0 hover:bg-gray-50", !m.is_active && "opacity-60")}>
               <td className="px-4 py-3">
@@ -312,61 +389,55 @@ export function ModelList() {
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <SessionBadge sessions={sessions} />
-                  {/* Stop button for each running session */}
                   {runningSessions.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => stopSessionMutation.mutate(s.id)}
-                      disabled={stopSessionMutation.isPending}
-                      title={`Stop ${s.backend_url}`}
-                      className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                    >
+                    <button key={s.id} onClick={() => stopSessionMutation.mutate(s.id)}
+                      disabled={stopSessionMutation.isPending} title={`Stop ${s.backend_url}`}
+                      className="p-0.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors">
                       <Square className="w-3 h-3" />
                     </button>
                   ))}
-                  {/* Start new session button */}
-                  <button
-                    onClick={() => setStartSessionFor(m.id)}
-                    title="Avvia nuova sessione"
-                    className="p-0.5 rounded text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
-                  >
+                  <button onClick={() => setStartSessionFor(m.id)} title="Avvia nuova sessione"
+                    className="p-0.5 rounded text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
                     <Play className="w-3 h-3" />
                   </button>
                 </div>
               </td>
-              <td className="px-4 py-3 text-gray-600 text-xs">{m.tier}</td>
+
+              {/* ── Pricing columns ── */}
+              <td className="px-3 py-2">
+                <PriceCell
+                  modelId={m.id}
+                  field="input"
+                  valueMicro={pricing?.input_cost_per_1k_micro ?? 0}
+                  onSaved={() => qc.invalidateQueries({ queryKey: ["pricing"] })}
+                />
+              </td>
+              <td className="px-3 py-2">
+                <PriceCell
+                  modelId={m.id}
+                  field="output"
+                  valueMicro={pricing?.output_cost_per_1k_micro ?? 0}
+                  onSaved={() => qc.invalidateQueries({ queryKey: ["pricing"] })}
+                />
+              </td>
+
               <td className="px-4 py-3 text-right text-gray-600 text-xs">{m.vram_gb ? `${m.vram_gb}GB` : "—"}</td>
               <td className="px-4 py-3">
-                <div className="flex gap-1 flex-wrap">
-                  {m.capabilities?.tool_calling && <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">tools</span>}
-                  {m.capabilities?.streaming && <span className="text-xs px-1.5 py-0.5 bg-green-50 text-green-600 rounded">stream</span>}
-                  {m.capabilities?.vision && <span className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">vision</span>}
-                  {m.capabilities?.batch_input && <span className="text-xs px-1.5 py-0.5 bg-gray-50 text-gray-600 rounded">batch</span>}
-                </div>
-              </td>
-              <td className="px-4 py-3">
                 <div className="flex items-center justify-end gap-1">
-                  <Link
-                    to={`/models/${m.id}/pricing`}
-                    className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 border rounded px-2 py-1 hover:bg-gray-50 transition-colors"
-                  >
-                    <DollarSign className="w-3 h-3" />
-                    Pricing
+                  <Link to={`/models/${m.id}/pricing`}
+                    className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    title="Storico modifiche prezzi">
+                    <History className="w-3.5 h-3.5" />
                   </Link>
                   {allowDeprecate ? (
-                    <button
-                      onClick={() => confirm(`Deprecare "${m.id}"?`) && deprecateMutation.mutate(m.id)}
+                    <button onClick={() => confirm(`Deprecare "${m.id}"?`) && deprecateMutation.mutate(m.id)}
                       title="Depreca modello"
-                      className="p-1.5 rounded text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                    >
+                      className="p-1.5 rounded text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors">
                       <Archive className="w-3.5 h-3.5" />
                     </button>
                   ) : (
-                    <button
-                      onClick={() => restoreMutation.mutate(m.id)}
-                      title="Ripristina modello"
-                      className="p-1.5 rounded text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors"
-                    >
+                    <button onClick={() => restoreMutation.mutate(m.id)} title="Ripristina modello"
+                      className="p-1.5 rounded text-gray-400 hover:bg-green-50 hover:text-green-600 transition-colors">
                       <RotateCcw className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -384,37 +455,26 @@ export function ModelList() {
 
   return (
     <div className="space-y-4">
-      {/* Start Session Modal */}
       {startSessionFor && (
-        <StartSessionModal
-          modelId={startSessionFor}
-          onClose={() => setStartSessionFor(null)}
-        />
+        <StartSessionModal modelId={startSessionFor} onClose={() => setStartSessionFor(null)} />
       )}
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-gray-900">Models</h1>
         <div className="flex items-center gap-2">
-          <Link
-            to="/models/search"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
+          <Link to="/models/search"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Search className="w-4 h-4" />
             Cerca Repository
           </Link>
-          <button
-            onClick={() => reloadMutation.mutate()}
-            disabled={reloadMutation.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-          >
+          <button onClick={() => reloadMutation.mutate()} disabled={reloadMutation.isPending}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors">
             <RefreshCw className={cn("w-4 h-4", reloadMutation.isPending && "animate-spin")} />
             Reload Config
           </button>
-          <button
-            onClick={() => { setShowForm(!showForm); setFormError(null); }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
-          >
+          <button onClick={() => { setShowForm(!showForm); setFormError(null); }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
             <Plus className="w-4 h-4" />
             Aggiungi Modello
           </button>
@@ -511,10 +571,8 @@ export function ModelList() {
       {/* Deprecated models */}
       {deprecated.length > 0 && (
         <div className="bg-white rounded-xl border overflow-hidden">
-          <button
-            onClick={() => setShowDeprecated(!showDeprecated)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-          >
+          <button onClick={() => setShowDeprecated(!showDeprecated)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
             <span className="flex items-center gap-2">
               <Archive className="w-4 h-4" />
               Modelli deprecati / disattivati ({deprecated.length})
