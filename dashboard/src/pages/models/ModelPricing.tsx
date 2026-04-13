@@ -40,10 +40,31 @@ export function ModelPricing() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Convert micro-EUR integer → EUR display string for the input field
+  function microToEurStr(micro: number): string {
+    if (micro === 0) return "";
+    return (micro / 1_000_000).toFixed(7).replace(/\.?0+$/, "");
+  }
+
+  // Convert EUR string → micro-EUR integer for the API
+  function eurToMicro(eurStr: string): number {
+    const v = parseFloat(eurStr);
+    if (isNaN(v) || v < 0) return 0;
+    return Math.round(v * 1_000_000);
+  }
+
+  // Display helper: EUR string → per-token breakdown
+  const toPerToken = (eurStr: string) => {
+    const v = parseFloat(eurStr);
+    if (isNaN(v) || v === 0) return "";
+    const perToken = v / 1000;
+    return `= €${perToken.toFixed(10).replace(/0+$/, "")} / token`;
+  };
+
   useEffect(() => {
     if (priceData) {
-      setInputCost(String(priceData.input_cost_per_1k_micro ?? 0));
-      setOutputCost(String(priceData.output_cost_per_1k_micro ?? 0));
+      setInputCost(microToEurStr(priceData.input_cost_per_1k_micro ?? 0));
+      setOutputCost(microToEurStr(priceData.output_cost_per_1k_micro ?? 0));
     }
   }, [priceData]);
 
@@ -67,18 +88,10 @@ export function ModelPricing() {
     e.preventDefault();
     setError(null);
     mutation.mutate({
-      input_cost_per_1k_micro: parseInt(inputCost, 10),
-      output_cost_per_1k_micro: parseInt(outputCost, 10),
+      input_cost_per_1k_micro: eurToMicro(inputCost),
+      output_cost_per_1k_micro: eurToMicro(outputCost),
       currency: "EUR",
     });
-  };
-
-  const toEUR = (micro: string) => {
-    const v = parseInt(micro, 10);
-    if (isNaN(v) || v === 0) return "—";
-    const per1k = (v / 1_000_000).toFixed(6);
-    const perToken = (v / 1_000_000_000).toFixed(10);
-    return `€${per1k}/1K  (€${perToken}/token)`;
   };
 
   const history: PricingHistory[] = historyData?.history ?? [];
@@ -103,39 +116,49 @@ export function ModelPricing() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-xs text-gray-500 bg-gray-50 rounded-md px-3 py-2">
-              Valori in <strong>micro-EUR per 1K token</strong> (interi).
-              Esempio: <code className="font-mono">500</code> = €0.0005/1K token = €0.0000005/token.
-              Per STT/TTS: per 1K secondi audio o caratteri.
+              Inserisci il prezzo in <strong>€ per 1K unità</strong>.
+              Esempio: <code className="font-mono">0.0005</code> = €0.0005/1K token = €0.0000005/token.
+              Per STT: per 1K secondi · Per TTS: per 1K caratteri.
             </p>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Costo Input (micro-EUR / 1K)
+                Costo Input (€ / 1K)
               </label>
-              <input
-                type="number"
-                min="0"
-                value={inputCost}
-                onChange={(e) => setInputCost(e.target.value)}
-                required
-                className="w-full px-3 py-2 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="mt-1 text-xs text-gray-400">{toEUR(inputCost)}</p>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">€</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.0000001"
+                  placeholder="0.0005"
+                  value={inputCost}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInputCost(e.target.value)}
+                  required
+                  className="w-full pl-6 pr-3 py-2 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {inputCost && <p className="mt-1 text-xs text-gray-400 font-mono">{toPerToken(inputCost)}</p>}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Costo Output (micro-EUR / 1K)
+                Costo Output (€ / 1K)
               </label>
-              <input
-                type="number"
-                min="0"
-                value={outputCost}
-                onChange={(e) => setOutputCost(e.target.value)}
-                required
-                className="w-full px-3 py-2 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="mt-1 text-xs text-gray-400">{toEUR(outputCost)}</p>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">€</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.0000001"
+                  placeholder="0.0005"
+                  value={outputCost}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOutputCost(e.target.value)}
+                  required
+                  className="w-full pl-6 pr-3 py-2 border rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {outputCost && <p className="mt-1 text-xs text-gray-400 font-mono">{toPerToken(outputCost)}</p>}
             </div>
 
             {error && (
