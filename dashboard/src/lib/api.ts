@@ -168,6 +168,9 @@ export const adminApi = {
   togglePii: (entity_type: string, enabled: boolean) =>
     api.post("/admin/settings/pii/toggle", { entity_type, enabled }),
 
+  // Docs
+  getApiDocs: () => api.get("/admin/docs/api", { headers: { Accept: "text/plain" }, responseType: "text" }),
+
   // Conversations
   listConversations: (params?: { tenant_id?: string; warm_state?: string }) =>
     api.get("/admin/conversations", { params }),

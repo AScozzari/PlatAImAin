@@ -25,6 +25,7 @@ from gateway.routes.admin import model_search
 from gateway.routes.admin import pod_definitions as pod_defs_admin
 from gateway.routes.admin import settings_admin
 from gateway.routes.admin import conversations as conversations_admin
+from gateway.routes.admin import docs as docs_admin
 from gateway.middleware.admin_auth import require_admin
 
 logging.basicConfig(
@@ -91,6 +92,7 @@ admin_router.include_router(model_search.router)
 admin_router.include_router(pod_defs_admin.router)
 admin_router.include_router(settings_admin.router)
 admin_router.include_router(conversations_admin.router)
+admin_router.include_router(docs_admin.router)
 app.include_router(admin_router)
 
 

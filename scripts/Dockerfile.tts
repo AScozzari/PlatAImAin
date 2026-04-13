@@ -1,0 +1,66 @@
+# ─── TTS Worker — XTTS v2 + Kokoro ────────────────────────────────────────────
+# Build with model weights baked in:
+#   XTTS v2 (~1.8GB VRAM):
+#     docker build -f scripts/Dockerfile.tts \
+#       --build-arg MODEL_TYPE=xtts \
+#       --build-arg HF_TOKEN=hf_xxx \
+#       -t plataimain/tts-xtts:latest .
+#
+#   Kokoro v1 (~300MB VRAM):
+#     docker build -f scripts/Dockerfile.tts \
+#       --build-arg MODEL_TYPE=kokoro \
+#       --build-arg HF_TOKEN=hf_xxx \
+#       -t plataimain/tts-kokoro:latest .
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM python:3.11-slim AS downloader
+
+ARG HF_TOKEN
+ARG MODEL_TYPE=xtts
+
+RUN pip install --no-cache-dir huggingface_hub[hf_transfer]
+
+# Download XTTS v2
+RUN if [ "${MODEL_TYPE}" = "xtts" ]; then \
+    python -c "\
+from huggingface_hub import snapshot_download; \
+snapshot_download( \
+    'coqui/XTTS-v2', \
+    local_dir='/models/tts/xtts-v2', \
+    token='${HF_TOKEN}' \
+)"; \
+fi
+
+# Download Kokoro v1
+RUN if [ "${MODEL_TYPE}" = "kokoro" ]; then \
+    python -c "\
+from huggingface_hub import snapshot_download; \
+snapshot_download( \
+    'hexgrad/Kokoro-82M', \
+    local_dir='/models/tts/kokoro-v1', \
+    token='${HF_TOKEN}' \
+)"; \
+fi
+
+# ─── Runtime stage ────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY tts-service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY tts-service/ .
+
+# Copy baked weights from downloader
+COPY --from=downloader /models /models
+
+ARG MODEL_TYPE=xtts
+ENV XTTS_MODEL_PATH=/models/tts/xtts-v2
+ENV KOKORO_MODEL_PATH=/models/tts/kokoro-v1
+ENV TTS_MODEL=${MODEL_TYPE}
+ENV HOST=0.0.0.0
+ENV PORT=8002
+
+EXPOSE 8002
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

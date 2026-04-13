@@ -339,6 +339,55 @@ const _mockConversations = {
   total: 2,
 };
 
+MOCK["/admin/docs/api"] = `# Custom AI Gateway — API Reference
+
+## Base URL
+\`http://your-server:8000\`
+
+## Authentication
+- **Tenant API key**: \`Authorization: Bearer <api_key>\`
+- **Admin JWT**: \`Authorization: Bearer <jwt_token>\`
+
+## OpenAI-Compatible Endpoints
+
+### POST /v1/chat/completions
+Chat completions (streaming supported via \`stream: true\`).
+
+### POST /v1/embeddings
+Text embeddings (batch up to 100 inputs).
+
+### POST /v1/audio/transcriptions
+Speech-to-text (WAV, MP3, M4A).
+
+### POST /v1/audio/speech
+Text-to-speech. Body: \`{ model, input, voice }\`
+
+### GET /v1/models
+List available models with capabilities.
+
+### GET /v1/usage
+Token usage for the authenticated tenant.
+
+## Admin Endpoints (require admin JWT)
+
+### GET /admin/models/pricing
+Returns pricing for all models in micro-EUR per 1K units.
+
+### PATCH /admin/models/:id/pricing
+Update pricing: \`{ input_cost_per_1k_micro, output_cost_per_1k_micro }\`
+
+### GET /admin/tenants
+List all tenants.
+
+### GET /admin/usage/billing?period=YYYY-MM
+Monthly billing report per tenant.
+
+### GET /admin/health
+Service health status.
+
+> Note: This is mock documentation. Start the gateway to load the full API reference.
+`;
+
 MOCK["/admin/pods"]          = _mockPods;
 MOCK["/admin/settings"]      = _mockSettings;
 MOCK["/admin/settings/pii/toggles"] = _mockPiiToggles;
@@ -390,6 +439,8 @@ export function getMockForUrl(url: string): unknown | null {
   if (/^\/admin\/conversations\/[^/]+$/.test(path)) {
     return (_mockConversations.conversations as { id: string }[])[0];
   }
+  // API docs
+  if (path === "/admin/docs/api") return MOCK["/admin/docs/api"];
   // Model search: /admin/models/search (has query params)
   if (path === "/admin/models/search") return _mockModelSearch;
   // Model detail: /admin/models/:id (not /pricing, /reload, /enable, /health, /search, /sessions)

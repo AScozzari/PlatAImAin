@@ -11,6 +11,8 @@ import {
   Server,
   MessageSquare,
   Settings,
+  DollarSign,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
@@ -22,10 +24,12 @@ const nav = [
   { to: "/usage", label: "Usage", icon: BarChart2 },
   { to: "/billing", label: "Billing", icon: Receipt },
   { to: "/models", label: "Models", icon: Cpu },
+  { to: "/models/pricing", label: "Pricing", icon: DollarSign },
   { to: "/pods", label: "Pods", icon: Server },
   { to: "/conversations", label: "Conversations", icon: MessageSquare },
   { to: "/health", label: "Health", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/docs", label: "API Docs", icon: FileText },
 ];
 
 export function Sidebar() {

@@ -1,0 +1,49 @@
+# ─── STT Worker — Whisper (faster-whisper) ────────────────────────────────────
+# Build with model weights baked in:
+#   docker build -f scripts/Dockerfile.stt \
+#     --build-arg HF_TOKEN=hf_xxx \
+#     --build-arg MODEL_NAME=openai/whisper-large-v3-turbo \
+#     -t plataimain/stt-whisper-large:latest .
+#
+# For other Whisper variants, change MODEL_NAME:
+#   openai/whisper-large-v3  (6GB VRAM)
+#   openai/whisper-medium    (3GB VRAM)
+#   openai/whisper-small     (1GB VRAM)
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM python:3.11-slim AS downloader
+
+ARG HF_TOKEN
+ARG MODEL_NAME=openai/whisper-large-v3-turbo
+
+RUN pip install --no-cache-dir huggingface_hub[hf_transfer]
+
+RUN python -c "\
+from huggingface_hub import snapshot_download; \
+snapshot_download( \
+    '${MODEL_NAME}', \
+    local_dir='/models/stt/${MODEL_NAME}', \
+    token='${HF_TOKEN}', \
+    ignore_patterns=['*.pt', '*.bin'] \
+)"
+
+# ─── Runtime stage ────────────────────────────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY stt-service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY stt-service/ .
+
+# Copy baked weights from downloader
+COPY --from=downloader /models /models
+
+ARG MODEL_NAME=openai/whisper-large-v3-turbo
+ENV WHISPER_MODEL_PATH=/models/stt/${MODEL_NAME}
+ENV HOST=0.0.0.0
+ENV PORT=8001
+
+EXPOSE 8001
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]

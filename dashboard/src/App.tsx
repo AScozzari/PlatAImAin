@@ -17,6 +17,8 @@ import { HealthDashboard } from "@/pages/health/HealthDashboard";
 import { PodList } from "@/pages/pods/PodList";
 import { ConversationList } from "@/pages/conversations/ConversationList";
 import { PlatformSettings } from "@/pages/settings/PlatformSettings";
+import { PricingOverview } from "@/pages/models/PricingOverview";
+import { ApiDocs } from "@/pages/docs/ApiDocs";
 
 export default function App() {
   return (
@@ -42,7 +44,9 @@ export default function App() {
           <Route path="billing/export" element={<BillingExport />} />
           <Route path="models" element={<ModelList />} />
           <Route path="models/search" element={<ModelSearch />} />
+          <Route path="models/pricing" element={<PricingOverview />} />
           <Route path="models/:id/pricing" element={<ModelPricing />} />
+          <Route path="docs" element={<ApiDocs />} />
           <Route path="health" element={<HealthDashboard />} />
           <Route path="pods" element={<PodList />} />
           <Route path="conversations" element={<ConversationList />} />
